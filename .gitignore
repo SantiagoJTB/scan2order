@@ -1,0 +1,30 @@
+# Laravel
+/vendor/
+/node_modules/
+/public/storage
+/storage/*.key
+/.env
+/.env.*
+Homestead.json
+Homestead.yaml
+/.phpunit.result.cache
+
+# Composer files
+composer.lock
+
+# IDEs and editors
+/.idea/
+/.vscode/
+
+# Docker
+docker-compose.override.yml
+/*.log
+
+# NPM build output
+/frontend/dist/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+debug.log
