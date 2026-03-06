@@ -124,6 +124,11 @@ GET    /api/categories
    - ❌ Problema: Documentación con info obsoleta
    - ✅ Solución: Actualizado con estructura correcta del proyecto
 
+### 4. **Conflicto de Puerto 5432** (Durante deployment)
+   - ❌ Problema: PostgreSQL del sistema ocupaba puerto 5432
+   - ✅ Solución: Cambio a puerto 5433 en docker-compose.yml
+   - ✅ Verificación: Stack completo levantado y funcionando
+
 ---
 
 ## 🚀 Comandos Importantes
@@ -138,7 +143,7 @@ docker-compose up --build -d
 ### Acceso:
 - Frontend SPA: http://localhost:8080
 - Backend API: http://localhost:8080/api
-- PostgreSQL: localhost:5432
+- PostgreSQL: localhost:5433
 
 ### Detener:
 ```bash

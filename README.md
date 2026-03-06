@@ -89,7 +89,7 @@ Al finalizar el proceso:
 
 - Laravel estará disponible en `http://localhost:8080/api`
 - La SPA Vue se sirve en `http://localhost:8080/`
-- PostgreSQL escucha en el puerto `5432` del host
+- PostgreSQL escucha en el puerto `5433` del host (para evitar conflictos con PostgreSQL local)
 
 El servicio `frontend` construye los assets y mantiene un contenedor en ejecución para que Nginx tenga acceso a la carpeta `dist` mediante un volumen compartido.
 
