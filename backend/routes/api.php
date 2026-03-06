@@ -2,6 +2,13 @@
 
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
+use App\Http\Controllers\RestaurantController;
+use App\Http\Controllers\ProductController;
+use App\Http\Controllers\OrderController;
+use App\Http\Controllers\CategoryController;
+use App\Http\Controllers\TableController;
+use App\Http\Controllers\PaymentController;
+use App\Http\Controllers\OrderItemController;
 
 /*
 |--------------------------------------------------------------------------
@@ -17,7 +24,19 @@ use Illuminate\Support\Facades\Route;
 Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
     return $request->user();
 });
-// simple hello endpoint for frontend testing
+
+// Public test endpoint
 Route::get('/hello', function () {
     return response()->json(['message' => 'Hello from Laravel']);
 });
+
+// Resource routes (public for now)
+Route::apiResources([
+    'restaurants' => RestaurantController::class,
+    'products' => ProductController::class,
+    'orders' => OrderController::class,
+    'categories' => CategoryController::class,
+    'tables' => TableController::class,
+    'payments' => PaymentController::class,
+    'order-items' => OrderItemController::class,
+]);

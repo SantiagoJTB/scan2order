@@ -36,36 +36,46 @@ scan2order/
 
 ## Configuración
 
-1. Copia el fichero de entorno para el backend:
-   ```sh
-   cp backend/.env.example backend/.env
-   ```
-   Ajusta valores si es necesario (usuario/contraseña de PostgreSQL).
+El proyecto se configura automáticamente cuando se levanta con Docker. En la startup:
 
-2. (Opcional) si modificas código PHP y necesitas instalar dependencias:
-   ```sh
-   docker-compose run --rm backend composer install
-   ```
+1. Se copia `.env.example` → `.env` en el backend
+2. Se genera la `APP_KEY` 
+3. Se ejecutan las migraciones de base de datos
+4. Se fijan permisos de usuario en `storage` y `bootstrap/cache`
 
-3. El código de la interfaz Vue ahora se encuentra en
-   `backend/resources/js` y se despliega por Laravel/Vite. Para instalar
-   dependencias y compilar manualmente usa el servicio Node incluido:
-   ```sh
-   cd backend
-   npm install
-   npm run dev   # inicia el servidor de desarrollo Vite
-   ```
-   También puedes ejecutar `docker-compose run --rm frontend npm run dev`
-   que hace lo mismo dentro de un contenedor.
+Si necesitas hacer cambios manuales:
 
-   ## Desarrollo del frontend
+```sh
+# Editar variables de entorno si es necesario
+cp backend/.env.example backend/.env
+# Luego edita backend/.env con valores propios
 
-   - Rutas principales: `/` (health), `/login`, `/register`, `/restaurants`,
-     `/categories`, `/products`, `/tables`, `/orders`, `/orders/:id`.
-   - La SPA autentica contra los endpoints `api/login` y `api/register`.
-   - Axios se configura automáticamente para enviar el token en cada
-     petición.
+# Para instalar dependencias del backend después de cambios
+docker-compose exec backend composer install
 
+# Para instalar dependencias del frontend
+docker-compose exec frontend npm install
+```
+
+## Estructura del Proyecto
+
+- **backend/** → Laravel 10 con API REST
+  - `app/Models` → Modelos de datos (Restaurant, Product, Order, etc.)
+  - `app/Http/Controllers` → Controllers de la API
+  - `routes/api.php` → Rutas registradas de recursos
+  - `database/migrations` → Migraciones de BD
+  
+- **frontend/** → Vue 3 SPA con Vite
+  - `src/views` → Páginas principales (Restaurants, Orders, Products, Home)
+  - `src/stores` → Pinia stores (gestión de estado)
+  - `src/services` → Cliente API Fetch
+  - `src/router` → Enrutador de la aplicación
+
+- **docker/** → Dockerfiles y configuraciones
+  - `php/Dockerfile` → Imagen PHP 8.2-FPM
+  - `nginx/` → Config y Dockerfile de Nginx
+  
+- **docker-compose.yml** → Orquestación de 4 servicios (db, backend, frontend, nginx)
 
 ## Levantar el proyecto
 
