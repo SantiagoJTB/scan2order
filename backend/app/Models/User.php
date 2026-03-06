@@ -21,6 +21,7 @@ class User extends Authenticatable
         'name',
         'email',
         'password',
+        'phone',
     ];
 
     /**
@@ -42,4 +43,29 @@ class User extends Authenticatable
         'email_verified_at' => 'datetime',
         'password' => 'hashed',
     ];
+
+    /**
+     * Restaurants the user belongs to (pivot stores role_id).
+     */
+    public function restaurants()
+    {
+        return $this->belongsToMany(Restaurant::class, 'user_restaurant')
+                    ->withPivot('role_id');
+    }
+
+    /**
+     * Global roles assigned to the user.
+     */
+    public function globalRoles()
+    {
+        return $this->belongsToMany(Role::class, 'user_global_role');
+    }
+
+    /**
+     * Orders placed by the user.
+     */
+    public function orders()
+    {
+        return $this->hasMany(Order::class);
+    }
 }

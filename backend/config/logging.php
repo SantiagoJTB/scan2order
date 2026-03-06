@@ -118,6 +118,13 @@ return [
             'replace_placeholders' => true,
         ],
 
+        'db_errors' => [
+            'driver' => 'single',
+            'path' => storage_path('logs/db_errors.log'),
+            'level' => 'error',
+            'replace_placeholders' => true,
+        ],
+
         'null' => [
             'driver' => 'monolog',
             'handler' => NullHandler::class,

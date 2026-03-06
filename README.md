@@ -47,10 +47,25 @@ scan2order/
    docker-compose run --rm backend composer install
    ```
 
-3. (Opcional) para trabajar en el frontend puedes usar el contenedor Node:
+3. El código de la interfaz Vue ahora se encuentra en
+   `backend/resources/js` y se despliega por Laravel/Vite. Para instalar
+   dependencias y compilar manualmente usa el servicio Node incluido:
    ```sh
-   docker-compose run --rm frontend npm run dev
+   cd backend
+   npm install
+   npm run dev   # inicia el servidor de desarrollo Vite
    ```
+   También puedes ejecutar `docker-compose run --rm frontend npm run dev`
+   que hace lo mismo dentro de un contenedor.
+
+   ## Desarrollo del frontend
+
+   - Rutas principales: `/` (health), `/login`, `/register`, `/restaurants`,
+     `/categories`, `/products`, `/tables`, `/orders`, `/orders/:id`.
+   - La SPA autentica contra los endpoints `api/login` y `api/register`.
+   - Axios se configura automáticamente para enviar el token en cada
+     petición.
+
 
 ## Levantar el proyecto
 

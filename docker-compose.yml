@@ -3,6 +3,7 @@ version: '3.9'
 services:
   db:
     image: postgres:15-alpine
+    container_name: scan2order-db
     environment:
       POSTGRES_DB: scan2order
       POSTGRES_USER: postgres
@@ -11,11 +12,17 @@ services:
       - pgdata:/var/lib/postgresql/data
     ports:
       - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   backend:
     build:
       context: ./backend
       dockerfile: ../docker/php/Dockerfile
+    container_name: scan2order-backend
     volumes:
       - ./backend:/var/www/html
     environment:
@@ -27,19 +34,22 @@ services:
       - DB_PASSWORD=password
       - APP_ENV=local
       - APP_DEBUG=true
-    entrypoint: ["sh","-c","cp /var/www/html/.env.example /var/www/html/.env && php artisan key:generate --force && chown -R www-data:www-data /var/www/html/storage /var/www/html/bootstrap/cache && php-fpm"]
+      - APP_URL=http://localhost:8080
+    entrypoint: ["sh","-c","cp /var/www/html/.env.example /var/www/html/.env && php artisan key:generate --force && php artisan migrate --force && chown -R www-data:www-data /var/www/html/storage /var/www/html/bootstrap/cache && php-fpm"]
     ports:
       - "9000:9000"
     depends_on:
-      - db
+      db:
+        condition: service_healthy
 
   frontend:
     image: node:20-alpine
+    container_name: scan2order-frontend
     working_dir: /app
     volumes:
       - ./frontend:/app
       - frontend_dist:/app/dist
-    command: sh -c "npm install && npm run build && sleep infinity"
+    command: sh -c "npm install && npm run build"
     depends_on:
       - backend
 
@@ -47,13 +57,14 @@ services:
     build:
       context: ./docker/nginx
       dockerfile: Dockerfile
+    container_name: scan2order-nginx
     ports:
       - "8080:80"
     depends_on:
       - backend
       - frontend
     volumes:
-      - frontend_dist:/usr/share/nginx/html
+      - frontend_dist:/usr/share/nginx/html:ro
 
 volumes:
   pgdata:
