@@ -26,6 +26,17 @@
             <h3 class="restaurant-name">{{ restaurant.name }}</h3>
             <p class="restaurant-address">{{ restaurant.address || 'Sin dirección' }}</p>
             <p class="restaurant-phone">{{ restaurant.phone || 'Sin teléfono' }}</p>
+            <div class="restaurant-admins">
+              <strong>Admins:</strong>
+              <div v-if="Array.isArray(restaurant.admins) && restaurant.admins.length" class="admin-lines">
+                <div v-for="admin in restaurant.admins" :key="admin.id" class="admin-line">
+                  {{ admin.name }}
+                  <span v-if="admin.phone"> · {{ admin.phone }}</span>
+                  <span v-if="admin.email"> · {{ admin.email }}</span>
+                </div>
+              </div>
+              <span v-else>Sin admins vinculados</span>
+            </div>
           </div>
           <div class="restaurant-meta">
             <span class="status-badge" :class="restaurant.active ? 'status-active' : 'status-inactive'">
@@ -34,6 +45,7 @@
           </div>
           <div class="restaurant-actions">
             <button class="btn-action" @click="openEditModal(restaurant)" title="Editar restaurante">✏️</button>
+            <button class="btn-action" @click="openMenuEditor(restaurant)" title="Editar carta/menu">📋</button>
             <button class="btn-action" @click="toggleStatus(restaurant)" title="Cambiar estado">🔄</button>
             <button class="btn-delete" @click="openDeleteModal(restaurant)" title="Eliminar restaurante">🗑️</button>
           </div>
@@ -69,6 +81,23 @@
               <input v-model="form.active" type="checkbox" />
               Restaurante activo
             </label>
+          </div>
+
+          <div class="form-group">
+            <label>Admins vinculados:</label>
+            <div v-if="isLoadingAdmins" class="admins-loading">Cargando admins...</div>
+            <div v-else-if="adminOptions.length === 0" class="admins-empty">No hay admins disponibles</div>
+            <div v-else class="admins-list">
+              <label v-for="admin in adminOptions" :key="admin.id" class="admin-item">
+                <input
+                  v-model="form.adminIds"
+                  type="checkbox"
+                  :value="admin.id"
+                  :disabled="isOnlyOwnAdminSelectable && admin.id !== auth.user?.id"
+                />
+                <span>{{ admin.name }} ({{ admin.email }})</span>
+              </label>
+            </div>
           </div>
 
           <div v-if="formError" class="error">{{ formError }}</div>
@@ -121,9 +150,11 @@
 
 <script setup>
 import { computed, onMounted, ref } from 'vue'
+import { useRouter } from 'vue-router'
 import { useAuthStore } from '../../stores/auth'
 
 const auth = useAuthStore()
+const router = useRouter()
 const canAccessAdmin = computed(() => auth.hasAnyRole(['admin', 'superadmin']))
 
 const restaurants = ref([])
@@ -135,9 +166,12 @@ const showDeleteModal = ref(false)
 const isEditing = ref(false)
 const isSaving = ref(false)
 const isDeleting = ref(false)
+const isLoadingAdmins = ref(false)
 const formError = ref(null)
 const restaurantToDelete = ref(null)
 const deleteConfirmed = ref(false)
+const adminOptions = ref([])
+const isOnlyOwnAdminSelectable = computed(() => auth.userRole === 'admin' && auth.userRole !== 'superadmin')
 
 const toast = ref({ show: false, type: 'success', message: '' })
 let toastTimer = null
@@ -147,7 +181,8 @@ const form = ref({
   name: '',
   address: '',
   phone: '',
-  active: true
+  active: true,
+  adminIds: []
 })
 
 function showToast(message, type = 'success') {
@@ -185,34 +220,101 @@ async function fetchRestaurants() {
   }
 }
 
+async function fetchAdminOptions() {
+  if (!auth.token) return
+
+  isLoadingAdmins.value = true
+  try {
+    const response = await fetch('/api/users', {
+      headers: {
+        'Authorization': `Bearer ${auth.token}`,
+        'Accept': 'application/json'
+      }
+    })
+
+    if (!response.ok) throw new Error('No se pudo cargar la lista de admins')
+
+    const data = await response.json()
+    const users = Array.isArray(data) ? data : []
+    const admins = users.filter(user => user?.role?.name === 'admin')
+
+    if (auth.userRole === 'admin' && auth.user) {
+      const meExists = admins.some(admin => admin.id === auth.user.id)
+      if (!meExists) {
+        admins.push({
+          id: auth.user.id,
+          name: auth.user.name,
+          email: auth.user.email
+        })
+      }
+    }
+
+    adminOptions.value = admins
+  } catch (err) {
+    adminOptions.value = []
+    showToast(err.message, 'error')
+  } finally {
+    isLoadingAdmins.value = false
+  }
+}
+
 function resetForm() {
   form.value = {
     id: null,
     name: '',
     address: '',
     phone: '',
-    active: true
+    active: true,
+    adminIds: []
   }
 }
 
-function openCreateModal() {
+async function openCreateModal() {
   isEditing.value = false
   formError.value = null
   resetForm()
+  await fetchAdminOptions()
+
+  if (auth.userRole === 'admin' && auth.user) {
+    form.value.adminIds = [auth.user.id]
+  }
+
   showFormModal.value = true
 }
 
-function openEditModal(restaurant) {
+async function openEditModal(restaurant) {
   isEditing.value = true
   formError.value = null
+  await fetchAdminOptions()
+
+  const currentAdminIds = Array.isArray(restaurant.admins)
+    ? restaurant.admins.map(admin => admin.id)
+    : []
+
   form.value = {
     id: restaurant.id,
     name: restaurant.name || '',
     address: restaurant.address || '',
     phone: restaurant.phone || '',
-    active: Boolean(restaurant.active)
+    active: Boolean(restaurant.active),
+    adminIds: currentAdminIds
   }
+
+  if (auth.userRole === 'admin' && auth.user && !form.value.adminIds.includes(auth.user.id)) {
+    form.value.adminIds = [auth.user.id]
+  }
+
   showFormModal.value = true
+}
+
+function openMenuEditor(restaurant) {
+  router.push({
+    path: '/admin/products',
+    query: {
+      restaurantId: String(restaurant.id),
+      restaurantName: restaurant.name || ''
+    }
+  })
 }
 
 function closeFormModal() {
@@ -265,6 +367,12 @@ async function saveRestaurant() {
       throw new Error(data?.message || 'No se pudo guardar el restaurante')
     }
 
+    const restaurantId = data?.id || form.value.id
+    const shouldSyncAdmins = restaurantId && (isEditing.value || auth.userRole === 'superadmin' || auth.userRole === 'admin')
+    if (shouldSyncAdmins) {
+      await syncRestaurantAdmins(restaurantId)
+    }
+
     closeFormModal()
     await fetchRestaurants()
     showToast(isEditing.value ? 'Restaurante actualizado' : 'Restaurante creado', 'success')
@@ -273,6 +381,25 @@ async function saveRestaurant() {
     showToast(err.message, 'error')
   } finally {
     isSaving.value = false
+  }
+}
+
+async function syncRestaurantAdmins(restaurantId) {
+  const response = await fetch(`/api/restaurants/${restaurantId}/admins`, {
+    method: 'PUT',
+    headers: {
+      'Authorization': `Bearer ${auth.token}`,
+      'Content-Type': 'application/json',
+      'Accept': 'application/json'
+    },
+    body: JSON.stringify({
+      admin_ids: Array.isArray(form.value.adminIds) ? form.value.adminIds : []
+    })
+  })
+
+  if (!response.ok) {
+    const data = await response.json().catch(() => null)
+    throw new Error(data?.message || 'No se pudieron actualizar los admins del restaurante')
   }
 }
 
@@ -459,6 +586,20 @@ onMounted(() => {
   font-size: 0.95rem;
 }
 
+.restaurant-admins {
+  margin: 0.35rem 0 0;
+  color: #34495e;
+  font-size: 0.9rem;
+}
+
+.admin-lines {
+  margin-top: 0.25rem;
+}
+
+.admin-line {
+  margin: 0.1rem 0;
+}
+
 .restaurant-meta {
   display: flex;
   align-items: center;
@@ -600,6 +741,32 @@ onMounted(() => {
 
 .checkbox-group input {
   width: auto;
+}
+
+.admins-loading,
+.admins-empty {
+  color: #7f8c8d;
+  font-size: 0.9rem;
+}
+
+.admins-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  max-height: 170px;
+  overflow-y: auto;
+  padding: 0.6rem;
+  border: 1px solid #ecf0f1;
+  border-radius: 6px;
+}
+
+.admin-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0;
+  color: #2c3e50;
+  font-weight: 500;
 }
 
 .form-actions {

@@ -115,6 +115,58 @@
           </div>
         </div>
 
+        <div v-if="orphanStaffUsers.length > 0" class="section">
+          <h2 class="section-title">⚠️ Usuarios huérfanos (Caja/Cocina)</h2>
+
+          <div class="team-members orphan-members">
+            <div v-for="member in orphanStaffUsers" :key="member.id" class="team-card">
+              <div class="user-info">
+                <div class="user-avatar-small">
+                  {{ member.role?.name === 'caja' ? '💰' : '👨‍🍳' }}
+                </div>
+                <div class="user-details">
+                  <div class="user-name-small">{{ member.name }}</div>
+                  <div class="user-email-small">{{ member.email }}</div>
+                </div>
+              </div>
+              <div class="user-meta">
+                <span class="badge" :class="`badge-${member.role?.name}`">
+                  {{ member.role?.name }}
+                </span>
+                <span class="status-badge" :class="`status-${member.status}`">
+                  {{ member.status }}
+                </span>
+              </div>
+              <div class="user-actions">
+                <button
+                  v-if="canEditUser(member)"
+                  @click="openEditModal(member)"
+                  class="btn-edit-small"
+                  title="Editar usuario"
+                >
+                  ✏️
+                </button>
+                <button
+                  v-if="canChangeStatus(member)"
+                  @click="changeStatus(member)"
+                  class="btn-action-small"
+                  title="Cambiar estado"
+                >
+                  🔄
+                </button>
+                <button
+                  v-if="canDeleteUser(member)"
+                  @click="openDeleteModal(member)"
+                  class="btn-delete-small"
+                  title="Eliminar usuario"
+                >
+                  🗑️
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
         <!-- Sección de Clientes -->
         <div class="section">
           <h2 class="section-title">👥 Usuarios clientes ({{ clientUsers.length }})</h2>
@@ -277,13 +329,37 @@
 
           <div class="form-group">
             <label for="role">Rol:</label>
-            <select v-model="newUser.role" id="role" required>
+            <select v-model="newUser.role" id="role" required @change="handleNewUserRoleChange">
               <option value="">Seleccionar rol</option>
               <option v-if="auth.hasRole('superadmin')" value="admin">Admin</option>
               <option value="caja">Caja</option>
               <option value="cocina">Cocina</option>
               <option v-if="auth.hasRole('superadmin')" value="cliente">Cliente</option>
             </select>
+          </div>
+
+          <div v-if="showAssignAdminOption" class="form-group">
+            <label class="assign-admin-check">
+              <input v-model="newUser.assignToAdmin" type="checkbox" />
+              Asignar a un admin
+            </label>
+
+            <select
+              v-if="newUser.assignToAdmin"
+              v-model="newUser.adminId"
+              class="admin-select"
+              :disabled="adminOptions.length === 0"
+              required
+            >
+              <option value="">Seleccionar admin</option>
+              <option v-for="admin in adminOptions" :key="admin.id" :value="admin.id">
+                {{ admin.name }} ({{ admin.email }})
+              </option>
+            </select>
+
+            <p v-if="newUser.assignToAdmin && adminOptions.length === 0" class="inline-warning">
+              No hay admins disponibles para asignar.
+            </p>
           </div>
 
           <div v-if="createError" class="error">{{ createError }}</div>
@@ -419,7 +495,9 @@ const newUser = ref({
   email: '',
   password: '',
   phone: '',
-  role: ''
+  role: '',
+  assignToAdmin: true,
+  adminId: ''
 })
 
 // Grupos de administradores con sus equipos (caja y cocina)
@@ -437,10 +515,37 @@ const adminGroups = computed(() => {
   })
 })
 
+const orphanStaffUsers = computed(() => {
+  if (!auth.hasRole('superadmin')) return []
+
+  const adminIds = new Set(
+    users.value
+      .filter(u => u.role?.name === 'admin')
+      .map(u => u.id)
+  )
+
+  return users.value.filter(u => {
+    const isStaff = u.role?.name === 'caja' || u.role?.name === 'cocina'
+    if (!isStaff) return false
+
+    const createdBy = u.created_by
+    return !createdBy || !adminIds.has(createdBy)
+  })
+})
+
 // Usuarios clientes
 const clientUsers = computed(() => {
   if (!auth.hasRole('superadmin')) return []
   return users.value.filter(u => u.role?.name === 'cliente')
+})
+
+const adminOptions = computed(() => {
+  if (!auth.hasRole('superadmin')) return []
+  return users.value.filter(u => u.role?.name === 'admin')
+})
+
+const showAssignAdminOption = computed(() => {
+  return auth.hasRole('superadmin') && ['caja', 'cocina'].includes(newUser.value.role)
 })
 
 const canManageUsers = computed(() => auth.hasAnyRole(['superadmin', 'admin']))
@@ -521,6 +626,23 @@ async function createUser() {
   isCreating.value = true
 
   try {
+    if (showAssignAdminOption.value && newUser.value.assignToAdmin && !newUser.value.adminId) {
+      throw new Error('Debes seleccionar un admin o desmarcar la asignación')
+    }
+
+    const payload = {
+      name: newUser.value.name,
+      email: newUser.value.email,
+      password: newUser.value.password,
+      phone: newUser.value.phone,
+      role: newUser.value.role
+    }
+
+    if (showAssignAdminOption.value) {
+      payload.assign_to_admin = newUser.value.assignToAdmin
+      payload.admin_id = newUser.value.assignToAdmin ? Number(newUser.value.adminId) : null
+    }
+
     const response = await fetch('/api/users', {
       method: 'POST',
       headers: {
@@ -528,13 +650,7 @@ async function createUser() {
         'Content-Type': 'application/json',
         'Accept': 'application/json'
       },
-      body: JSON.stringify({
-        name: newUser.value.name,
-        email: newUser.value.email,
-        password: newUser.value.password,
-        phone: newUser.value.phone,
-        role: newUser.value.role
-      })
+      body: JSON.stringify(payload)
     })
 
     const contentType = response.headers.get('content-type') || ''
@@ -561,7 +677,7 @@ async function createUser() {
 
     // Close modal and reset form
     showCreateForm.value = false
-    newUser.value = { name: '', email: '', password: '', phone: '', role: '' }
+    newUser.value = { name: '', email: '', password: '', phone: '', role: '', assignToAdmin: true, adminId: '' }
     
     // Refresh users list
     await fetchUsers()
@@ -571,6 +687,13 @@ async function createUser() {
     showToast(err.message, 'error')
   } finally {
     isCreating.value = false
+  }
+}
+
+function handleNewUserRoleChange() {
+  if (!['caja', 'cocina'].includes(newUser.value.role)) {
+    newUser.value.assignToAdmin = true
+    newUser.value.adminId = ''
   }
 }
 
@@ -1057,6 +1180,31 @@ onMounted(() => {
   border-color: #667eea;
 }
 
+.assign-admin-check {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.6rem;
+}
+
+.assign-admin-check input {
+  width: auto;
+}
+
+.admin-select {
+  width: 100%;
+  padding: 0.75rem;
+  border: 2px solid #ecf0f1;
+  border-radius: 5px;
+  font-size: 1rem;
+}
+
+.inline-warning {
+  margin: 0.5rem 0 0;
+  color: #c0392b;
+  font-size: 0.9rem;
+}
+
 .form-actions {
   display: flex;
   gap: 1rem;
@@ -1285,6 +1433,12 @@ onMounted(() => {
   padding-left: 2rem;
   border-left: 3px solid #667eea;
   margin-left: 1rem;
+}
+
+.orphan-members {
+  padding-left: 0;
+  border-left: none;
+  margin-left: 0;
 }
 
 .team-card {
