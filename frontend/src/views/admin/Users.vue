@@ -1,5 +1,9 @@
 <template>
   <div class="users-container">
+    <div v-if="toast.show" class="toast" :class="`toast-${toast.type}`">
+      {{ toast.message }}
+    </div>
+
     <div class="header">
       <h1>Gestión de Usuarios</h1>
       <button @click="showCreateForm = true" class="btn-create">
@@ -225,6 +229,8 @@ const auth = useAuthStore()
 const users = ref([])
 const isLoading = ref(false)
 const error = ref(null)
+const toast = ref({ show: false, type: 'success', message: '' })
+let toastTimer = null
 const showCreateForm = ref(false)
 const isCreating = ref(false)
 const createError = ref(null)
@@ -256,6 +262,22 @@ const clientUsers = computed(() => {
   if (!auth.hasRole('superadmin')) return []
   return users.value.filter(u => u.role?.name === 'cliente')
 })
+
+function showToast(message, type = 'success') {
+  if (toastTimer) {
+    clearTimeout(toastTimer)
+  }
+
+  toast.value = {
+    show: true,
+    type,
+    message
+  }
+
+  toastTimer = setTimeout(() => {
+    toast.value.show = false
+  }, 2500)
+}
 
 async function fetchUsers() {
   isLoading.value = true
@@ -333,8 +355,10 @@ async function createUser() {
     
     // Refresh users list
     await fetchUsers()
+    showToast('Usuario creado correctamente', 'success')
   } catch (err) {
     createError.value = err.message
+    showToast(err.message, 'error')
   } finally {
     isCreating.value = false
   }
@@ -354,9 +378,11 @@ async function changeStatus(user) {
     })
 
     if (!response.ok) throw new Error('Error updating status')
-    fetchUsers()
+    await fetchUsers()
+    showToast('Estado actualizado correctamente', 'success')
   } catch (err) {
     error.value = err.message
+    showToast(err.message, 'error')
   }
 }
 
@@ -385,8 +411,10 @@ async function deleteUser(user) {
     }
 
     await fetchUsers()
+    showToast('Usuario eliminado correctamente', 'success')
   } catch (err) {
     error.value = err.message
+    showToast(err.message, 'error')
   }
 }
 
@@ -399,6 +427,26 @@ onMounted(() => {
 .users-container {
   max-width: 1200px;
   margin: 0 auto;
+}
+
+.toast {
+  position: fixed;
+  top: 1.5rem;
+  right: 1.5rem;
+  z-index: 2000;
+  padding: 0.85rem 1rem;
+  border-radius: 8px;
+  color: white;
+  font-weight: 600;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.2);
+}
+
+.toast-success {
+  background: #27ae60;
+}
+
+.toast-error {
+  background: #e74c3c;
 }
 
 .header {
