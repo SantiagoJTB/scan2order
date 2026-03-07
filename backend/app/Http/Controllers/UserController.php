@@ -146,17 +146,22 @@ class UserController extends Controller
             return response()->json(['message' => 'Unauthorized'], 403);
         }
 
-        $query = User::with('role');
+        $query = User::with(['role', 'creator']);
 
         // Admin only sees their created users
-        if ($currentUser->hasRole('admin')) {
+        if ($currentUser->hasRole('admin') && !$currentUser->hasRole('superadmin')) {
             $query->where('created_by', $currentUser->id)
                   ->orWhere('id', $currentUser->id);
         }
 
-        $users = $query->paginate(15);
+        $users = $query->get();
 
-        return response()->json($users);
+        // Format users
+        $formattedUsers = $users->map(function($user) {
+            return $this->formatUser($user);
+        });
+
+        return response()->json($formattedUsers);
     }
 
     /**
@@ -187,6 +192,7 @@ class UserController extends Controller
             'email' => $user->email,
             'phone' => $user->phone,
             'status' => $user->status,
+            'created_by' => $user->created_by,
             'role' => $user->role ? [
                 'id' => $user->role->id,
                 'name' => $user->role->name,

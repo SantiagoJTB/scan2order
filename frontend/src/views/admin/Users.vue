@@ -258,8 +258,12 @@ async function fetchUsers() {
     })
     if (!response.ok) throw new Error('Failed to fetch users')
     const data = await response.json()
-    users.value = data.data || data
+    console.log('Fetched users:', data)
+    // Backend now returns array directly (not paginated)
+    users.value = Array.isArray(data) ? data : (data.data || [])
+    console.log('Users array set to:', users.value)
   } catch (err) {
+    console.error('Error fetching users:', err)
     error.value = err.message
   } finally {
     isLoading.value = false
@@ -291,10 +295,18 @@ async function createUser() {
       throw new Error(data.message || 'Error creating user')
     }
 
+    // Read the response to see created users
+    const result = await response.json()
+    console.log('Users created:', result)
+
+    // Close modal and reset form
     showCreateForm.value = false
     newUser.value = { name: '', email: '', password: '', phone: '', role: '' }
-    fetchUsers()
+    
+    // Refresh users list
+    await fetchUsers()
   } catch (err) {
+    console.error('Error creating user:', err)
     createError.value = err.message
   } finally {
     isCreating.value = false
