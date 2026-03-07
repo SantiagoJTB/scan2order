@@ -6,7 +6,7 @@
 
     <div class="header">
       <h1>Gestión de Usuarios</h1>
-      <button @click="showCreateForm = true" class="btn-create">
+      <button v-if="canManageUsers" @click="showCreateForm = true" class="btn-create">
         + Crear Usuario
       </button>
     </div>
@@ -289,6 +289,8 @@ const clientUsers = computed(() => {
   return users.value.filter(u => u.role?.name === 'cliente')
 })
 
+const canManageUsers = computed(() => auth.hasAnyRole(['superadmin', 'admin']))
+
 function showToast(message, type = 'success') {
   if (toastTimer) {
     clearTimeout(toastTimer)
@@ -333,6 +335,11 @@ async function fetchUsers() {
 }
 
 async function createUser() {
+  if (!canManageUsers.value) {
+    showToast('No autorizado para crear usuarios', 'error')
+    return
+  }
+
   createError.value = null
   isCreating.value = true
 
@@ -391,6 +398,11 @@ async function createUser() {
 }
 
 async function changeStatus(user) {
+  if (!canManageUsers.value) {
+    showToast('No autorizado para cambiar estado', 'error')
+    return
+  }
+
   const newStatus = user.status === 'active' ? 'inactive' : 'active'
   try {
     const response = await fetch(`/api/users/${user.id}/status`, {
@@ -413,6 +425,11 @@ async function changeStatus(user) {
 }
 
 function openDeleteModal(user) {
+  if (!canManageUsers.value) {
+    showToast('No autorizado para eliminar usuarios', 'error')
+    return
+  }
+
   userToDelete.value = user
   showDeleteModal.value = true
 }
@@ -423,6 +440,11 @@ function cancelDelete() {
 }
 
 async function confirmDelete() {
+  if (!canManageUsers.value) {
+    showToast('No autorizado para eliminar usuarios', 'error')
+    return
+  }
+
   if (!userToDelete.value) return
 
   isDeleting.value = true
