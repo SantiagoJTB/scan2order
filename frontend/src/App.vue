@@ -6,16 +6,16 @@
         <span class="role-badge">{{ auth.userRole }}</span>
       </div>
       <ul class="nav-links">
-        <li v-if="auth.hasRole('cliente')"><router-link to="/menu">Menú</router-link></li>
-        <li v-if="auth.hasRole('cliente')"><router-link to="/cart">
+        <li v-if="isCliente"><router-link to="/menu">Menú</router-link></li>
+        <li v-if="isCliente"><router-link to="/cart">
           Carrito <span class="cart-count" v-if="cart.itemCount > 0">({{ cart.itemCount }})</span>
         </router-link></li>
         
-        <li v-if="auth.hasAnyRole(['admin', 'superadmin'])"><router-link to="/admin">Panel Admin</router-link></li>
-        <li v-if="auth.hasAnyRole(['admin', 'superadmin'])"><router-link to="/admin/users">Usuarios</router-link></li>
+        <li v-if="canAccessAdmin"><router-link to="/admin">Panel Admin</router-link></li>
+        <li v-if="canAccessAdmin"><router-link to="/admin/users">Usuarios</router-link></li>
         
-        <li v-if="auth.hasRole('caja')"><router-link to="/caja">Pagos</router-link></li>
-        <li v-if="auth.hasRole('cocina')"><router-link to="/cocina">Órdenes</router-link></li>
+        <li v-if="isCaja"><router-link to="/caja">Pagos</router-link></li>
+        <li v-if="isCocina"><router-link to="/cocina">Órdenes</router-link></li>
         
         <li class="user-menu">
           <button @click="showUserMenu = !showUserMenu" class="user-btn">
@@ -37,13 +37,17 @@
 <script setup>
 import { useAuthStore } from './stores/auth'
 import { useCartStore } from './stores/cart'
-import { ref, onMounted, watch } from 'vue'
+import { ref, onMounted, watch, computed } from 'vue'
 import { useRouter } from 'vue-router'
 
 const auth = useAuthStore()
 const cart = useCartStore()
 const router = useRouter()
 const showUserMenu = ref(false)
+const canAccessAdmin = computed(() => auth.hasAnyRole(['admin', 'superadmin']))
+const isCliente = computed(() => auth.hasRole('cliente'))
+const isCaja = computed(() => auth.hasRole('caja'))
+const isCocina = computed(() => auth.hasRole('cocina'))
 
 onMounted(() => {
   auth.initFromStorage()
