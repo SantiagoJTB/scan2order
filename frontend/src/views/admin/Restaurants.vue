@@ -26,6 +26,7 @@
             <h3 class="restaurant-name">{{ restaurant.name }}</h3>
             <p class="restaurant-address">{{ restaurant.address || 'Sin dirección' }}</p>
             <p class="restaurant-phone">{{ restaurant.phone || 'Sin teléfono' }}</p>
+            <p class="restaurant-created">📅 {{ formatDate(restaurant.created_at) }}</p>
             <div class="restaurant-admins">
               <strong>Admins:</strong>
               <div v-if="Array.isArray(restaurant.admins) && restaurant.admins.length" class="admin-lines">
@@ -191,6 +192,13 @@ function showToast(message, type = 'success') {
   toastTimer = setTimeout(() => {
     toast.value.show = false
   }, 2500)
+}
+
+function formatDate(date) {
+  if (!date) return 'N/A'
+  const dateObj = new Date(date)
+  const options = { year: 'numeric', month: '2-digit', day: '2-digit' }
+  return dateObj.toLocaleDateString('es-ES', options)
 }
 
 async function fetchRestaurants() {
@@ -584,6 +592,13 @@ onMounted(() => {
   margin: 0.15rem 0;
   color: #7f8c8d;
   font-size: 0.95rem;
+}
+
+.restaurant-created {
+  margin: 0.2rem 0 0;
+  color: #95a5a6;
+  font-size: 0.85rem;
+  font-weight: 500;
 }
 
 .restaurant-admins {

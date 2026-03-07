@@ -28,6 +28,7 @@
                 <div class="user-details">
                   <div class="user-name">{{ group.admin.name }}</div>
                   <div class="user-email">{{ group.admin.email }}</div>
+                  <div class="user-created">📅 {{ formatDate(group.admin.created_at) }}</div>
                 </div>
               </div>
               <div class="user-meta">
