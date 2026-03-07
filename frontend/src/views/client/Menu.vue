@@ -1,8 +1,15 @@
 <template>
   <div class="menu-container">
     <div class="header">
-      <h1>Menú de Productos</h1>
-      <p>Selecciona los productos que deseas ordenar</p>
+      <div v-if="restaurant" class="restaurant-header">
+        <h1>{{ restaurant.name }}</h1>
+        <p v-if="restaurant.address" class="restaurant-info">📍 {{ restaurant.address }}</p>
+        <p v-if="restaurant.phone" class="restaurant-info">📞 {{ restaurant.phone }}</p>
+      </div>
+      <div v-else>
+        <h1>Menú de Productos</h1>
+        <p>Selecciona los productos que deseas ordenar</p>
+      </div>
     </div>
 
     <div class="menu-content">
@@ -41,8 +48,8 @@
         </div>
       </div>
 
-      <div v-else class="no-products">
-        No hay productos disponibles
+      <div v-else-if="!isLoading" class="no-products">
+        No hay productos disponibles para este restaurante
       </div>
     </div>
 
@@ -59,12 +66,15 @@
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
+import { useRoute } from 'vue-router'
 import { useCartStore } from '../../stores/cart'
 
+const route = useRoute()
 const cart = useCartStore()
 const isLoading = ref(false)
 const error = ref(null)
 const products = ref([])
+const restaurant = ref(null)
 const searchText = ref('')
 
 const filteredProducts = computed(() => {
@@ -77,13 +87,43 @@ const filteredProducts = computed(() => {
   )
 })
 
+async function fetchRestaurant(id) {
+  try {
+    const response = await fetch(`/api/restaurants/${id}`, {
+      headers: { 'Accept': 'application/json' }
+    })
+    if (!response.ok) throw new Error('Restaurant not found')
+    restaurant.value = await response.json()
+  } catch (err) {
+    console.error('Error fetching restaurant:', err)
+  }
+}
+
 async function fetchProducts() {
   isLoading.value = true
   error.value = null
   try {
-    const response = await fetch('/api/products')
+    const restaurantId = route.params.id
+    let url = '/api/products'
+    
+    // If we have a restaurant ID, filter by restaurant
+    if (restaurantId) {
+      url += `?restaurant_id=${restaurantId}`
+    }
+    
+    const response = await fetch(url, {
+      headers: { 'Accept': 'application/json' }
+    })
+    
     if (!response.ok) throw new Error('Failed to fetch products')
-    products.value = await response.json()
+    
+    const data = await response.json()
+    // Filter by restaurant_id if provided
+    if (restaurantId) {
+      products.value = data.filter(p => p.restaurant_id == restaurantId)
+    } else {
+      products.value = data
+    }
   } catch (err) {
     error.value = err.message
   } finally {
@@ -96,6 +136,10 @@ function addToCart(product) {
 }
 
 onMounted(() => {
+  const restaurantId = route.params.id
+  if (restaurantId) {
+    fetchRestaurant(restaurantId)
+  }
   fetchProducts()
 })
 </script>
@@ -116,6 +160,26 @@ onMounted(() => {
 .header h1 {
   font-size: 2rem;
   margin-bottom: 0.5rem;
+}
+
+.restaurant-header {
+  text-align: center;
+  padding: 1.5rem;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+  backdrop-filter: blur(10px);
+}
+
+.restaurant-header h1 {
+  font-size: 2.5rem;
+  margin-bottom: 1rem;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.restaurant-info {
+  font-size: 1.1rem;
+  margin: 0.5rem 0;
+  opacity: 0.95;
 }
 
 .menu-content {

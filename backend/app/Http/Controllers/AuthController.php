@@ -17,11 +17,19 @@ class AuthController extends Controller
             'password' => 'required|string|min:6|confirmed',
         ]);
 
+        // Get cliente role by name (more robust than hardcoding ID)
+        $clienteRole = \App\Models\Role::where('name', 'cliente')->first();
+        
+        if (!$clienteRole) {
+            return response()->json(['message' => 'Cliente role not found'], 500);
+        }
+
         $user = User::create([
             'name' => $data['name'],
             'email' => $data['email'],
             'password' => Hash::make($data['password']),
-            'role_id' => 4, // Cliente role
+            'role_id' => $clienteRole->id,
+            'status' => 'active',
         ]);
 
         $token = $user->createToken('api-token')->plainTextToken;

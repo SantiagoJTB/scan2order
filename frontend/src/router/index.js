@@ -2,6 +2,7 @@ import { createRouter, createWebHistory } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 
 // Public views
+import Home from '../views/Home.vue'
 import Login from '../views/Login.vue'
 import Register from '../views/Register.vue'
 
@@ -24,6 +25,13 @@ import CajaPayments from '../views/caja/Payments.vue'
 import CocinaOrders from '../views/cocina/Orders.vue'
 
 const routes = [
+  // Public routes
+  {
+    path: '/',
+    name: 'Home',
+    component: Home,
+    meta: { public: true }
+  },
   {
     path: '/login',
     name: 'Login',
@@ -34,6 +42,12 @@ const routes = [
     path: '/register',
     name: 'Register',
     component: Register,
+    meta: { public: true }
+  },
+  {
+    path: '/restaurant/:id',
+    name: 'RestaurantMenu',
+    component: ClientMenu,
     meta: { public: true }
   },
   
@@ -103,23 +117,6 @@ const routes = [
     name: 'CocinaOrders',
     component: CocinaOrders,
     meta: { requiresAuth: true, roles: ['cocina'] }
-  },
-
-  // Redirect to home
-  {
-    path: '/',
-    name: 'Home',
-    redirect: (to) => {
-      const auth = useAuthStore()
-      if (!auth.isAuthenticated) return '/login'
-      
-      const role = auth.userRole
-      if (role === 'cliente') return '/menu'
-      if (role === 'admin' || role === 'superadmin') return '/admin'
-      if (role === 'caja') return '/caja'
-      if (role === 'cocina') return '/cocina'
-      return '/login'
-    }
   }
 ]
 
