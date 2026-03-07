@@ -37,8 +37,13 @@ class UserController extends Controller
             return response()->json(['message' => 'Role not found'], 404);
         }
 
-        // Superadmin can create any role, Admin can only create caja and cocina
-        if ($user->hasRole('admin') && !in_array($data['role'], ['caja', 'cocina'])) {
+        // Only superadmin can create admin users
+        // Regular admin can only create caja and cocina
+        if ($data['role'] === 'admin' && !$user->hasRole('superadmin')) {
+            return response()->json(['message' => 'Only superadmin can create admin users'], 403);
+        }
+
+        if ($user->hasRole('admin') && !$user->hasRole('superadmin') && !in_array($data['role'], ['caja', 'cocina'])) {
             return response()->json(['message' => 'Admin can only create caja and cocina users'], 403);
         }
 
