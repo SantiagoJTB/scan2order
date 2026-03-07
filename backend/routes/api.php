@@ -31,6 +31,7 @@ Route::get('/hello', function () {
 // Auth routes (public)
 Route::post('/login', [AuthController::class, 'login']);
 Route::post('/register', [AuthController::class, 'register']);
+Route::post('/webhooks/stripe', [PaymentController::class, 'handleStripeWebhook']);
 
 // Protected auth routes
 Route::middleware('auth:sanctum')->group(function () {
@@ -61,6 +62,7 @@ Route::middleware('auth:sanctum')->group(function () {
     // Restaurant management
     Route::post('/restaurants', [RestaurantController::class, 'store']);
     Route::put('/restaurants/{restaurant}', [RestaurantController::class, 'update']);
+    Route::put('/restaurants/{restaurant}/admins', [RestaurantController::class, 'syncAdmins']);
     Route::delete('/restaurants/{restaurant}', [RestaurantController::class, 'destroy']);
 
     // Product management
@@ -82,6 +84,9 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::apiResources([
         'orders' => OrderController::class,
         'order-items' => OrderItemController::class,
-        'payments' => PaymentController::class,
     ]);
+
+    Route::post('/orders/{orderId}/payments/stripe', [PaymentController::class, 'createStripePaymentIntent']);
+    Route::post('/orders/{orderId}/payments/cash', [PaymentController::class, 'createCashPayment']);
+    Route::get('/payments/{payment}', [PaymentController::class, 'show']);
 });

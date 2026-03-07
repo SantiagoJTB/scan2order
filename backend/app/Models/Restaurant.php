@@ -41,4 +41,13 @@ class Restaurant extends Model
         return $this->belongsToMany(User::class, 'user_restaurant')
                     ->withPivot('role_id');
     }
+
+    public function admins()
+    {
+        return $this->belongsToMany(User::class, 'user_restaurant')
+            ->withPivot('role_id')
+            ->whereHas('role', function ($query) {
+                $query->where('name', 'admin');
+            });
+    }
 }
