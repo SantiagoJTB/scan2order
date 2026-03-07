@@ -178,6 +178,7 @@
                   <div class="user-name">{{ client.name }}</div>
                   <div class="user-email">{{ client.email }}</div>
                   <div v-if="client.phone" class="user-phone">{{ client.phone }}</div>
+                  <div class="user-created">📅 {{ formatDate(client.created_at) }}</div>
                 </div>
               </div>
               <div class="user-meta">
@@ -587,6 +588,13 @@ function showToast(message, type = 'success') {
   toastTimer = setTimeout(() => {
     toast.value.show = false
   }, 2500)
+}
+
+function formatDate(date) {
+  if (!date) return 'N/A'
+  const dateObj = new Date(date)
+  const options = { year: 'numeric', month: '2-digit', day: '2-digit' }
+  return dateObj.toLocaleDateString('es-ES', options)
 }
 
 async function fetchUsers() {
@@ -1488,6 +1496,13 @@ onMounted(() => {
   font-size: 0.75rem;
   color: #7f8c8d;
   margin-top: 0.1rem;
+}
+
+.user-created {
+  font-size: 0.7rem;
+  color: #95a5a6;
+  margin-top: 0.1rem;
+  font-weight: 500;
 }
 
 @media (max-width: 768px) {
