@@ -52,6 +52,7 @@ Route::middleware('auth:sanctum')->group(function () {
 // Public API endpoints (for viewing menu, etc)
 Route::get('/restaurants', [RestaurantController::class, 'index']);
 Route::get('/restaurants/{restaurant}', [RestaurantController::class, 'show']);
+Route::get('/restaurants/{restaurantId}/catalogs', [ProductController::class, 'getCatalogsByRestaurant']);
 Route::get('/products', [ProductController::class, 'index']);
 Route::get('/products/{product}', [ProductController::class, 'show']);
 Route::get('/categories', [CategoryController::class, 'index']);
@@ -65,7 +66,22 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::put('/restaurants/{restaurant}/admins', [RestaurantController::class, 'syncAdmins']);
     Route::delete('/restaurants/{restaurant}', [RestaurantController::class, 'destroy']);
 
+    // Catalog management
+    Route::post('/restaurants/{restaurantId}/catalogs', [ProductController::class, 'storeCatalog']);
+    Route::put('/restaurants/{restaurantId}/catalogs/{catalogId}', [ProductController::class, 'updateCatalog']);
+    Route::delete('/restaurants/{restaurantId}/catalogs/{catalogId}', [ProductController::class, 'deleteCatalog']);
+
+    // Section management
+    Route::post('/restaurants/{restaurantId}/catalogs/{catalogId}/sections', [ProductController::class, 'storeSection']);
+    Route::put('/restaurants/{restaurantId}/catalogs/{catalogId}/sections/{sectionId}', [ProductController::class, 'updateSection']);
+    Route::delete('/restaurants/{restaurantId}/catalogs/{catalogId}/sections/{sectionId}', [ProductController::class, 'deleteSection']);
+
     // Product management
+    Route::post('/restaurants/{restaurantId}/catalogs/{catalogId}/sections/{sectionId}/products', [ProductController::class, 'storeProduct']);
+    Route::put('/restaurants/{restaurantId}/catalogs/{catalogId}/sections/{sectionId}/products/{productId}', [ProductController::class, 'updateProduct']);
+    Route::delete('/restaurants/{restaurantId}/catalogs/{catalogId}/sections/{sectionId}/products/{productId}', [ProductController::class, 'deleteProduct']);
+
+    // Legacy product management (keep for compatibility)
     Route::post('/products', [ProductController::class, 'store']);
     Route::put('/products/{product}', [ProductController::class, 'update']);
     Route::delete('/products/{product}', [ProductController::class, 'destroy']);

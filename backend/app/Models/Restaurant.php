@@ -21,6 +21,11 @@ class Restaurant extends Model
         return $this->hasMany(Category::class);
     }
 
+    public function catalogs()
+    {
+        return $this->hasMany(Catalog::class)->orderBy('order');
+    }
+
     public function products()
     {
         return $this->hasMany(Product::class);

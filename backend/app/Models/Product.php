@@ -9,7 +9,12 @@ class Product extends Model
 {
     use HasFactory;
 
-    protected $fillable = ['restaurant_id', 'category_id', 'name', 'description', 'price', 'active'];
+    protected $fillable = ['restaurant_id', 'category_id', 'section_id', 'name', 'description', 'price', 'active'];
+
+    protected $casts = [
+        'price' => 'float',
+        'active' => 'boolean',
+    ];
 
     public function restaurant()
     {
@@ -21,8 +26,14 @@ class Product extends Model
         return $this->belongsTo(Category::class);
     }
 
+    public function section()
+    {
+        return $this->belongsTo(Section::class);
+    }
+
     public function orderItems()
     {
         return $this->hasMany(OrderItem::class);
     }
 }
+
