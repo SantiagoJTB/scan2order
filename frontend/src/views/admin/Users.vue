@@ -40,7 +40,12 @@
                 <button @click="changeStatus(group.admin)" class="btn-action" title="Cambiar estado">
                   🔄
                 </button>
-                <button @click="openDeleteModal(group.admin)" class="btn-delete" title="Eliminar usuario">
+                <button 
+                  v-if="canDeleteUser(group.admin)"
+                  @click="openDeleteModal(group.admin)" 
+                  class="btn-delete" 
+                  title="Eliminar usuario"
+                >
                   🗑️
                 </button>
               </div>
@@ -70,7 +75,12 @@
                   <button @click="changeStatus(member)" class="btn-action-small" title="Cambiar estado">
                     🔄
                   </button>
-                  <button @click="openDeleteModal(member)" class="btn-delete-small" title="Eliminar usuario">
+                  <button 
+                    v-if="canDeleteUser(member)"
+                    @click="openDeleteModal(member)" 
+                    class="btn-delete-small" 
+                    title="Eliminar usuario"
+                  >
                     🗑️
                   </button>
                 </div>
@@ -101,7 +111,12 @@
                 <button @click="changeStatus(client)" class="btn-action" title="Cambiar estado">
                   🔄
                 </button>
-                <button @click="openDeleteModal(client)" class="btn-delete" title="Eliminar usuario">
+                <button 
+                  v-if="canDeleteUser(client)"
+                  @click="openDeleteModal(client)" 
+                  class="btn-delete" 
+                  title="Eliminar usuario"
+                >
                   🗑️
                 </button>
               </div>
@@ -135,7 +150,13 @@
           </div>
           <div class="col-actions">
             <button @click="changeStatus(user)" class="btn-action">Cambiar estado</button>
-            <button @click="openDeleteModal(user)" class="btn-delete">Eliminar</button>
+            <button 
+              v-if="canDeleteUser(user)"
+              @click="openDeleteModal(user)" 
+              class="btn-delete"
+            >
+              Eliminar
+            </button>
           </div>
         </div>
       </div>
@@ -365,6 +386,14 @@ const clientUsers = computed(() => {
 })
 
 const canManageUsers = computed(() => auth.hasAnyRole(['superadmin', 'admin']))
+
+function canDeleteUser(user) {
+  // No se puede eliminar a uno mismo
+  if (user.id === auth.user?.id) {
+    return false
+  }
+  return true
+}
 
 function showToast(message, type = 'success') {
   if (toastTimer) {
