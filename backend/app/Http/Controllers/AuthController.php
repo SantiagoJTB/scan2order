@@ -86,5 +86,4 @@ class AuthController extends Controller
             'permissions' => $user->permissions()->pluck('name'),
         ];
     }
-    }
 }

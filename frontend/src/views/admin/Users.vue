@@ -342,7 +342,7 @@ onMounted(() => {
   border-radius: 20px;
   font-size: 0.85rem;
   font-weight: 600;
-  text-tranform: uppercase;
+  text-transform: uppercase;
 }
 
 .status-active {
