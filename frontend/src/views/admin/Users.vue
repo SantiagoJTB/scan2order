@@ -100,15 +100,16 @@
         </div>
 
         <!-- Sección de Clientes -->
-        <div v-if="clientUsers.length > 0" class="section">
-          <h2 class="section-title">👥 Usuarios clientes</h2>
-          <div class="users-grid">
+        <div class="section">
+          <h2 class="section-title">👥 Usuarios clientes ({{ clientUsers.length }})</h2>
+          <div v-if="clientUsers.length > 0" class="users-grid">
             <div v-for="client in clientUsers" :key="client.id" class="client-card">
               <div class="user-info">
                 <div class="user-avatar">🛒</div>
                 <div class="user-details">
                   <div class="user-name">{{ client.name }}</div>
                   <div class="user-email">{{ client.email }}</div>
+                  <div v-if="client.phone" class="user-phone">{{ client.phone }}</div>
                 </div>
               </div>
               <div class="user-meta">
@@ -136,6 +137,9 @@
                 </button>
               </div>
             </div>
+          </div>
+          <div v-else class="empty-section">
+            <p>📭 No hay clientes registrados todavía</p>
           </div>
         </div>
       </div>
@@ -1299,6 +1303,21 @@ onMounted(() => {
   background: #f8fafb;
   border-radius: 8px;
   margin-bottom: 1rem;
+}
+
+.empty-section {
+  text-align: center;
+  padding: 2rem;
+  color: #7f8c8d;
+  background: #f8fafb;
+  border-radius: 8px;
+  font-size: 1.1rem;
+}
+
+.user-phone {
+  font-size: 0.85rem;
+  color: #7f8c8d;
+  margin-top: 0.25rem;
 }
 
 @media (max-width: 768px) {
