@@ -1,5 +1,5 @@
 <template>
-  <div class="admin-container">
+  <div v-if="canAccessAdmin" class="admin-container">
     <div class="header">
       <h1>Dashboard Admin</h1>
       <p>Bienvenido al panel de administración</p>
@@ -61,13 +61,23 @@
       </div>
     </div>
   </div>
+
+  <div v-else class="admin-container unauthorized-view">
+    <div class="stat-card">
+      <div class="stat-info">
+        <p class="stat-label">Acceso denegado</p>
+        <p class="stat-value">No autorizado</p>
+      </div>
+    </div>
+  </div>
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useAuthStore } from '../../stores/auth'
 
 const auth = useAuthStore()
+const canAccessAdmin = computed(() => auth.hasAnyRole(['admin', 'superadmin']))
 const stats = ref({
   users: 0,
   restaurants: 0,
@@ -75,8 +85,9 @@ const stats = ref({
   orders: 0
 })
 
-// Simulated stats (in production, fetch from API)
 onMounted(() => {
+  if (!canAccessAdmin.value) return
+
   stats.value = {
     users: 12,
     restaurants: 5,
@@ -90,6 +101,10 @@ onMounted(() => {
 .admin-container {
   max-width: 1200px;
   margin: 0 auto;
+}
+
+.unauthorized-view {
+  margin-top: 2rem;
 }
 
 .header {

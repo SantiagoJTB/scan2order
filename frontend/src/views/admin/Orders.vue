@@ -1,5 +1,5 @@
 <template>
-  <div class="orders-container">
+  <div v-if="canAccessAdmin" class="orders-container">
     <div class="header">
       <h1>Gestión de Órdenes</h1>
       <div class="header-actions">
@@ -27,9 +27,23 @@
       </div>
     </div>
   </div>
+
+  <div v-else class="orders-container">
+    <div class="content">
+      <div class="info-box">
+        <h2>⛔ Acceso denegado</h2>
+        <p>Solo Admin y Superadmin pueden acceder a esta sección.</p>
+      </div>
+    </div>
+  </div>
 </template>
 
 <script setup>
+import { computed } from 'vue'
+import { useAuthStore } from '../../stores/auth'
+
+const auth = useAuthStore()
+const canAccessAdmin = computed(() => auth.hasAnyRole(['admin', 'superadmin']))
 </script>
 
 <style scoped>
