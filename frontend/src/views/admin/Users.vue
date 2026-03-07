@@ -37,7 +37,12 @@
                 </span>
               </div>
               <div class="user-actions">
-                <button @click="changeStatus(group.admin)" class="btn-action" title="Cambiar estado">
+                <button 
+                  v-if="canChangeStatus(group.admin)"
+                  @click="changeStatus(group.admin)" 
+                  class="btn-action" 
+                  title="Cambiar estado"
+                >
                   🔄
                 </button>
                 <button 
@@ -72,7 +77,12 @@
                   </span>
                 </div>
                 <div class="user-actions">
-                  <button @click="changeStatus(member)" class="btn-action-small" title="Cambiar estado">
+                  <button 
+                    v-if="canChangeStatus(member)"
+                    @click="changeStatus(member)" 
+                    class="btn-action-small" 
+                    title="Cambiar estado"
+                  >
                     🔄
                   </button>
                   <button 
@@ -108,7 +118,12 @@
                 </span>
               </div>
               <div class="user-actions">
-                <button @click="changeStatus(client)" class="btn-action" title="Cambiar estado">
+                <button 
+                  v-if="canChangeStatus(client)"
+                  @click="changeStatus(client)" 
+                  class="btn-action" 
+                  title="Cambiar estado"
+                >
                   🔄
                 </button>
                 <button 
@@ -149,7 +164,13 @@
             </span>
           </div>
           <div class="col-actions">
-            <button @click="changeStatus(user)" class="btn-action">Cambiar estado</button>
+            <button 
+              v-if="canChangeStatus(user)"
+              @click="changeStatus(user)" 
+              class="btn-action"
+            >
+              Cambiar estado
+            </button>
             <button 
               v-if="canDeleteUser(user)"
               @click="openDeleteModal(user)" 
@@ -389,6 +410,14 @@ const canManageUsers = computed(() => auth.hasAnyRole(['superadmin', 'admin']))
 
 function canDeleteUser(user) {
   // No se puede eliminar a uno mismo
+  if (user.id === auth.user?.id) {
+    return false
+  }
+  return true
+}
+
+function canChangeStatus(user) {
+  // No se puede cambiar el estado a uno mismo
   if (user.id === auth.user?.id) {
     return false
   }
