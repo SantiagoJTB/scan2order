@@ -46,18 +46,18 @@
           <span class="btn-icon">👥</span>
           Gestionar usuarios
         </router-link>
-        <a href="#" class="action-btn">
+        <router-link to="/admin/restaurants" class="action-btn">
           <span class="btn-icon">🍽️</span>
           Gestionar restaurantes
-        </a>
-        <a href="#" class="action-btn">
+        </router-link>
+        <router-link to="/admin/products" class="action-btn">
           <span class="btn-icon">📦</span>
           Gestionar productos
-        </a>
-        <a href="#" class="action-btn">
+        </router-link>
+        <router-link to="/admin/orders" class="action-btn">
           <span class="btn-icon">📋</span>
           Ver órdenes
-        </a>
+        </router-link>
       </div>
     </div>
   </div>

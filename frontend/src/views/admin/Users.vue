@@ -11,7 +11,94 @@
       <div v-if="isLoading" class="loading">Cargando usuarios...</div>
       <div v-if="error" class="error">{{ error }}</div>
 
-      <div v-if="users.length > 0" class="users-table">
+      <!-- Vista para SUPERADMIN: Usuarios agrupados -->
+      <div v-if="!isLoading && auth.hasRole('superadmin')">
+        <!-- Sección de Admins -->
+        <div v-if="adminGroups.length > 0" class="section">
+          <h2 class="section-title">👨‍💼 Administradores y sus equipos</h2>
+          
+          <div v-for="group in adminGroups" :key="group.admin.id" class="admin-group">
+            <div class="admin-card">
+              <div class="user-info">
+                <div class="user-avatar">👤</div>
+                <div class="user-details">
+                  <div class="user-name">{{ group.admin.name }}</div>
+                  <div class="user-email">{{ group.admin.email }}</div>
+                </div>
+              </div>
+              <div class="user-meta">
+                <span class="badge badge-admin">Admin</span>
+                <span class="status-badge" :class="`status-${group.admin.status}`">
+                  {{ group.admin.status }}
+                </span>
+              </div>
+              <div class="user-actions">
+                <button @click="changeStatus(group.admin)" class="btn-action" title="Cambiar estado">
+                  🔄
+                </button>
+              </div>
+            </div>
+
+            <!-- Caja y Cocina del admin -->
+            <div v-if="group.team && group.team.length > 0" class="team-members">
+              <div v-for="member in group.team" :key="member.id" class="team-card">
+                <div class="user-info">
+                  <div class="user-avatar-small">
+                    {{ member.role?.name === 'caja' ? '💰' : '👨‍🍳' }}
+                  </div>
+                  <div class="user-details">
+                    <div class="user-name-small">{{ member.name }}</div>
+                    <div class="user-email-small">{{ member.email }}</div>
+                  </div>
+                </div>
+                <div class="user-meta">
+                  <span class="badge" :class="`badge-${member.role?.name}`">
+                    {{ member.role?.name }}
+                  </span>
+                  <span class="status-badge" :class="`status-${member.status}`">
+                    {{ member.status }}
+                  </span>
+                </div>
+                <div class="user-actions">
+                  <button @click="changeStatus(member)" class="btn-action-small" title="Cambiar estado">
+                    🔄
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Sección de Clientes -->
+        <div v-if="clientUsers.length > 0" class="section">
+          <h2 class="section-title">👥 Usuarios clientes</h2>
+          <div class="users-grid">
+            <div v-for="client in clientUsers" :key="client.id" class="client-card">
+              <div class="user-info">
+                <div class="user-avatar">🛒</div>
+                <div class="user-details">
+                  <div class="user-name">{{ client.name }}</div>
+                  <div class="user-email">{{ client.email }}</div>
+                </div>
+              </div>
+              <div class="user-meta">
+                <span class="badge badge-cliente">Cliente</span>
+                <span class="status-badge" :class="`status-${client.status}`">
+                  {{ client.status }}
+                </span>
+              </div>
+              <div class="user-actions">
+                <button @click="changeStatus(client)" class="btn-action" title="Cambiar estado">
+                  🔄
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Vista para ADMIN: Lista simple de sus usuarios -->
+      <div v-else-if="!isLoading && users.length > 0" class="users-table">
         <div class="table-header">
           <div class="col-name">Nombre</div>
           <div class="col-email">Email</div>
@@ -39,7 +126,7 @@
         </div>
       </div>
 
-      <div v-else class="no-users">No hay usuarios</div>
+      <div v-else-if="!isLoading" class="no-users">No hay usuarios</div>
     </div>
 
     <!-- Create user modal -->
@@ -121,7 +208,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useAuthStore } from '../../stores/auth'
 
 const auth = useAuthStore()
@@ -137,6 +224,27 @@ const newUser = ref({
   password: '',
   phone: '',
   role: ''
+})
+
+// Grupos de administradores con sus equipos (caja y cocina)
+const adminGroups = computed(() => {
+  if (!auth.hasRole('superadmin')) return []
+  
+  const admins = users.value.filter(u => u.role?.name === 'admin')
+  return admins.map(admin => {
+    // Buscar usuarios creados por este admin (caja y cocina)
+    const team = users.value.filter(u => 
+      u.created_by === admin.id && 
+      (u.role?.name === 'caja' || u.role?.name === 'cocina')
+    )
+    return { admin, team }
+  })
+})
+
+// Usuarios clientes
+const clientUsers = computed(() => {
+  if (!auth.hasRole('superadmin')) return []
+  return users.value.filter(u => u.role?.name === 'cliente')
 })
 
 async function fetchUsers() {
@@ -483,6 +591,164 @@ onMounted(() => {
   cursor: not-allowed;
 }
 
+/* New grouped styles for superadmin view */
+.section {
+  margin-bottom: 3rem;
+}
+
+.section-title {
+  color: #2c3e50;
+  font-size: 1.5rem;
+  margin-bottom: 1.5rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 2px solid #ecf0f1;
+}
+
+.admin-group {
+  margin-bottom: 2rem;
+  border: 2px solid #e8eef3;
+  border-radius: 10px;
+  padding: 1rem;
+  background: #f8fafb;
+}
+
+.admin-card {
+  display: grid;
+  grid-template-columns: 2fr 1.5fr auto;
+  align-items: center;
+  gap: 1rem;
+  background: white;
+  padding: 1.25rem;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  margin-bottom: 1rem;
+}
+
+.user-info {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.user-avatar {
+  width: 50px;
+  height: 50px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.5rem;
+}
+
+.user-avatar-small {
+  width: 35px;
+  height: 35px;
+  background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.2rem;
+}
+
+.user-details {
+  flex: 1;
+}
+
+.user-name {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: #2c3e50;
+  margin-bottom: 0.25rem;
+}
+
+.user-email {
+  font-size: 0.9rem;
+  color: #7f8c8d;
+}
+
+.user-name-small {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: #2c3e50;
+  margin-bottom: 0.2rem;
+}
+
+.user-email-small {
+  font-size: 0.8rem;
+  color: #7f8c8d;
+}
+
+.user-meta {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.user-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.btn-action-small {
+  padding: 0.4rem 0.8rem;
+  background: #667eea;
+  color: white;
+  border: none;
+  border-radius: 3px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  transition: opacity 0.3s ease;
+}
+
+.btn-action-small:hover {
+  opacity: 0.8;
+}
+
+.team-members {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding-left: 2rem;
+  border-left: 3px solid #667eea;
+  margin-left: 1rem;
+}
+
+.team-card {
+  display: grid;
+  grid-template-columns: 2fr 1.5fr auto;
+  align-items: center;
+  gap: 1rem;
+  background: white;
+  padding: 1rem;
+  border-radius: 6px;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
+}
+
+.users-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+  gap: 1rem;
+}
+
+.client-card {
+  display: grid;
+  grid-template-columns: 2fr 1.5fr auto;
+  align-items: center;
+  gap: 1rem;
+  background: white;
+  padding: 1.25rem;
+  border-radius: 8px;
+  border: 2px solid #e8eef3;
+  transition: all 0.3s ease;
+}
+
+.client-card:hover {
+  border-color: #27ae60;
+  box-shadow: 0 4px 12px rgba(39, 174, 96, 0.1);
+}
+
 @media (max-width: 768px) {
   .table-header,
   .table-row {
@@ -491,6 +757,30 @@ onMounted(() => {
 
   .modal {
     margin: 1rem;
+  }
+
+  .admin-card,
+  .team-card,
+  .client-card {
+    grid-template-columns: 1fr;
+    text-align: center;
+  }
+
+  .user-info {
+    flex-direction: column;
+  }
+
+  .user-meta {
+    justify-content: center;
+  }
+
+  .team-members {
+    padding-left: 1rem;
+    margin-left: 0.5rem;
+  }
+
+  .users-grid {
+    grid-template-columns: 1fr;
   }
 }
 </style>

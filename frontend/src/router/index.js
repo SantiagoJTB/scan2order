@@ -13,6 +13,9 @@ import ClientCheckout from '../views/client/Checkout.vue'
 // Admin views
 import AdminDashboard from '../views/admin/Dashboard.vue'
 import AdminUsers from '../views/admin/Users.vue'
+import AdminRestaurants from '../views/admin/Restaurants.vue'
+import AdminProducts from '../views/admin/Products.vue'
+import AdminOrders from '../views/admin/Orders.vue'
 
 // Caja views
 import CajaPayments from '../views/caja/Payments.vue'
@@ -65,6 +68,24 @@ const routes = [
     path: '/admin/users',
     name: 'AdminUsers',
     component: AdminUsers,
+    meta: { requiresAuth: true, roles: ['admin', 'superadmin'] }
+  },
+  {
+    path: '/admin/restaurants',
+    name: 'AdminRestaurants',
+    component: AdminRestaurants,
+    meta: { requiresAuth: true, roles: ['admin', 'superadmin'] }
+  },
+  {
+    path: '/admin/products',
+    name: 'AdminProducts',
+    component: AdminProducts,
+    meta: { requiresAuth: true, roles: ['admin', 'superadmin'] }
+  },
+  {
+    path: '/admin/orders',
+    name: 'AdminOrders',
+    component: AdminOrders,
     meta: { requiresAuth: true, roles: ['admin', 'superadmin'] }
   },
 
