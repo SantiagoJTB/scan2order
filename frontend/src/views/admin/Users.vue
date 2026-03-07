@@ -248,6 +248,7 @@
               <option v-if="auth.hasRole('superadmin')" value="admin">Admin</option>
               <option value="caja">Caja</option>
               <option value="cocina">Cocina</option>
+              <option value="cliente">Cliente</option>
             </select>
           </div>
 
