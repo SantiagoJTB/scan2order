@@ -13,11 +13,11 @@ class RolePermissionSeeder extends Seeder
     public function run(): void
     {
         // Create roles
-        $superadmin = Role::create(['name' => 'superadmin', 'is_global' => true]);
-        $admin = Role::create(['name' => 'admin', 'is_global' => true]);
-        $caja = Role::create(['name' => 'caja', 'is_global' => true]);
-        $cocina = Role::create(['name' => 'cocina', 'is_global' => true]);
-        $cliente = Role::create(['name' => 'cliente', 'is_global' => false]);
+        $superadmin = Role::firstOrCreate(['name' => 'superadmin'], ['is_global' => true]);
+        $admin = Role::firstOrCreate(['name' => 'admin'], ['is_global' => true]);
+        $caja = Role::firstOrCreate(['name' => 'caja'], ['is_global' => true]);
+        $cocina = Role::firstOrCreate(['name' => 'cocina'], ['is_global' => true]);
+        $cliente = Role::firstOrCreate(['name' => 'cliente'], ['is_global' => false]);
 
         // Create permissions
         $permissions = [
@@ -44,7 +44,7 @@ class RolePermissionSeeder extends Seeder
         ];
 
         foreach ($permissions as $name => $description) {
-            Permission::create(['name' => $name]);
+            Permission::firstOrCreate(['name' => $name]);
         }
 
         // Assign permissions to roles
@@ -85,13 +85,15 @@ class RolePermissionSeeder extends Seeder
         $cliente->permissions()->sync($clientePerms);
 
         // Create superadmin user
-        User::create([
-            'name' => 'Super Admin',
-            'email' => 'superadmin@scan2order.local',
-            'password' => Hash::make('superadmin123'),
-            'phone' => '000000000',
-            'role_id' => $superadmin->id,
-            'status' => 'active',
-        ]);
+        User::updateOrCreate(
+            ['email' => 'superadmin@scan2order.local'],
+            [
+                'name' => 'Super Admin',
+                'password' => Hash::make('superadmin123'),
+                'phone' => '000000000',
+                'role_id' => $superadmin->id,
+                'status' => 'active',
+            ]
+        );
     }
 }
