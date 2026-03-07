@@ -253,17 +253,21 @@ async function fetchUsers() {
   try {
     const response = await fetch('/api/users', {
       headers: {
-        'Authorization': `Bearer ${auth.token}`
+        'Authorization': `Bearer ${auth.token}`,
+        'Accept': 'application/json'
       }
     })
-    if (!response.ok) throw new Error('Failed to fetch users')
+    if (!response.ok) throw new Error('No se pudo cargar la lista de usuarios')
+
+    const contentType = response.headers.get('content-type') || ''
+    if (!contentType.includes('application/json')) {
+      throw new Error('La API devolvió una respuesta inválida al listar usuarios')
+    }
+
     const data = await response.json()
-    console.log('Fetched users:', data)
     // Backend now returns array directly (not paginated)
     users.value = Array.isArray(data) ? data : (data.data || [])
-    console.log('Users array set to:', users.value)
   } catch (err) {
-    console.error('Error fetching users:', err)
     error.value = err.message
   } finally {
     isLoading.value = false
@@ -279,7 +283,8 @@ async function createUser() {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${auth.token}`,
-        'Content-Type': 'application/json'
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'
       },
       body: JSON.stringify({
         name: newUser.value.name,
@@ -290,14 +295,27 @@ async function createUser() {
       })
     })
 
-    if (!response.ok) {
-      const data = await response.json()
-      throw new Error(data.message || 'Error creating user')
+    const contentType = response.headers.get('content-type') || ''
+
+    if (!response.ok || !contentType.includes('application/json')) {
+      let message = 'Error al crear usuario'
+
+      if (contentType.includes('application/json')) {
+        const data = await response.json()
+        if (data?.errors) {
+          const firstError = Object.values(data.errors)[0]
+          if (Array.isArray(firstError) && firstError.length > 0) {
+            message = firstError[0]
+          }
+        } else if (data?.message) {
+          message = data.message
+        }
+      }
+
+      throw new Error(message)
     }
 
-    // Read the response to see created users
-    const result = await response.json()
-    console.log('Users created:', result)
+    await response.json()
 
     // Close modal and reset form
     showCreateForm.value = false
@@ -306,7 +324,6 @@ async function createUser() {
     // Refresh users list
     await fetchUsers()
   } catch (err) {
-    console.error('Error creating user:', err)
     createError.value = err.message
   } finally {
     isCreating.value = false
@@ -320,7 +337,8 @@ async function changeStatus(user) {
       method: 'PATCH',
       headers: {
         'Authorization': `Bearer ${auth.token}`,
-        'Content-Type': 'application/json'
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'
       },
       body: JSON.stringify({ status: newStatus })
     })
