@@ -7,6 +7,11 @@
       </button>
     </div>
 
+    <div v-if="selectedRestaurantId" class="restaurant-context">
+      Editando carta/menu de:
+      <strong>{{ selectedRestaurantName || `Restaurante #${selectedRestaurantId}` }}</strong>
+    </div>
+
     <div class="content">
       <div class="info-box">
         <h2>📦 En construcción</h2>
@@ -35,10 +40,14 @@
 
 <script setup>
 import { computed } from 'vue'
+import { useRoute } from 'vue-router'
 import { useAuthStore } from '../../stores/auth'
 
 const auth = useAuthStore()
+const route = useRoute()
 const canAccessAdmin = computed(() => auth.hasAnyRole(['admin', 'superadmin']))
+const selectedRestaurantId = computed(() => route.query.restaurantId || null)
+const selectedRestaurantName = computed(() => route.query.restaurantName || '')
 </script>
 
 <style scoped>
@@ -58,6 +67,14 @@ const canAccessAdmin = computed(() => auth.hasAnyRole(['admin', 'superadmin']))
 .header h1 {
   font-size: 2rem;
   margin: 0;
+}
+
+.restaurant-context {
+  margin-bottom: 1rem;
+  background: #ecf6ff;
+  color: #2c3e50;
+  border-radius: 8px;
+  padding: 0.85rem 1rem;
 }
 
 .btn-create {

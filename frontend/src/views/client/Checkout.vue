@@ -56,7 +56,7 @@
             </label>
           </div>
 
-          <!-- Card payment form (simulated) -->
+          <!-- Card payment form (Stripe Elements) -->
           <div v-if="formData.paymentMethod === 'card'" class="card-form">
             <div class="form-group">
               <label for="cardname">Nombre en la tarjeta:</label>
@@ -68,37 +68,15 @@
               />
             </div>
             <div class="form-group">
-              <label for="cardnumber">Número de tarjeta:</label>
-              <input
-                v-model="formData.cardNumber"
-                type="text"
-                id="cardnumber"
-                placeholder="1234 5678 9012 3456"
-                maxlength="19"
-              />
+              <label>Datos de la tarjeta:</label>
+              <div ref="cardElementRef" class="stripe-card-element"></div>
             </div>
-            <div class="form-row">
-              <div class="form-group">
-                <label for="expiry">Vencimiento:</label>
-                <input
-                  v-model="formData.expiry"
-                  type="text"
-                  id="expiry"
-                  placeholder="MM/YY"
-                  maxlength="5"
-                />
-              </div>
-              <div class="form-group">
-                <label for="cvv">CVV:</label>
-                <input
-                  v-model="formData.cvv"
-                  type="text"
-                  id="cvv"
-                  placeholder="123"
-                  maxlength="3"
-                />
-              </div>
-            </div>
+            <p v-if="stripePublicKeyMissing" class="stripe-hint stripe-error">
+              Configura VITE_STRIPE_KEY para habilitar pagos con tarjeta.
+            </p>
+            <p v-else class="stripe-hint">
+              Usa una tarjeta de prueba de Stripe (ej: 4242 4242 4242 4242).
+            </p>
           </div>
         </div>
 
@@ -171,27 +149,35 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, nextTick, watch, onBeforeUnmount } from 'vue'
 import { useCartStore } from '../../stores/cart'
+import { useAuthStore } from '../../stores/auth'
 import { useRouter } from 'vue-router'
+import { loadStripe } from '@stripe/stripe-js'
 
 const cart = useCartStore()
+const auth = useAuthStore()
 const router = useRouter()
 const isLoading = ref(false)
 const error = ref(null)
 const showSuccess = ref(false)
 const orderNumber = ref(null)
+const stripeClientSecret = ref(null)
+const stripe = ref(null)
+const stripeElements = ref(null)
+const stripeCardElement = ref(null)
+const cardElementRef = ref(null)
 
 const formData = ref({
   address: '',
   city: '',
   postalcode: '',
   paymentMethod: 'card',
-  cardName: '',
-  cardNumber: '',
-  expiry: '',
-  cvv: ''
+  cardName: ''
 })
+
+const stripePublicKey = import.meta.env.VITE_STRIPE_KEY
+const stripePublicKeyMissing = computed(() => !stripePublicKey)
 
 const totalAmount = computed(() => {
   const tax = cart.total * 0.1
@@ -204,30 +190,24 @@ async function processPayment() {
   error.value = null
 
   try {
-    // Validate form
     if (!formData.value.address || !formData.value.city || !formData.value.postalcode) {
       throw new Error('Completa todos los campos de envío')
     }
 
-    if (formData.value.paymentMethod === 'card') {
-      if (!formData.value.cardName || !formData.value.cardNumber) {
-        throw new Error('Completa los datos de la tarjeta')
-      }
+    if (formData.value.paymentMethod === 'card' && !formData.value.cardName) {
+      throw new Error('Completa el nombre en la tarjeta')
     }
 
-    // Simulate payment processing
-    await new Promise(resolve => setTimeout(resolve, 2000))
+    const orderId = await createOrderWithItems()
+    orderNumber.value = String(orderId)
 
-    // Generate order number
-    orderNumber.value = String(10000 + Math.floor(Math.random() * 90000))
+    if (formData.value.paymentMethod === 'card' && auth.token) {
+      await startStripePayment(orderId)
+    } else if (formData.value.paymentMethod === 'cash' && auth.token) {
+      await createCashPayment(orderId)
+    }
 
-    // Here you would normally send the order to the backend
-    // For now, we're simulating a successful payment
-
-    // Show success modal
     showSuccess.value = true
-
-    // Clear cart
     cart.clear()
   } catch (err) {
     error.value = err.message
@@ -240,6 +220,211 @@ function goHome() {
   showSuccess.value = false
   router.push('/menu')
 }
+
+async function createOrderWithItems() {
+  if (!auth.token) {
+    throw new Error('Debes iniciar sesión para completar el pago')
+  }
+
+  if (!cart.items.length) {
+    throw new Error('Tu carrito está vacío')
+  }
+
+  const restaurantId = cart.items[0]?.restaurantId
+  if (!restaurantId) {
+    throw new Error('No se pudo determinar el restaurante del pedido')
+  }
+
+  const notes = `Entrega: ${formData.value.address}, ${formData.value.city}, ${formData.value.postalcode}`
+
+  const orderResponse = await fetch('/api/orders', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${auth.token}`,
+      'Content-Type': 'application/json',
+      'Accept': 'application/json'
+    },
+    body: JSON.stringify({
+      restaurant_id: restaurantId,
+      user_id: auth.user?.id || null,
+      type: 'delivery',
+      status: 'pending',
+      total: totalAmount.value,
+      notes
+    })
+  })
+
+  const orderContentType = orderResponse.headers.get('content-type') || ''
+  const orderData = orderContentType.includes('application/json') ? await orderResponse.json() : null
+
+  if (!orderResponse.ok || !orderData?.id) {
+    throw new Error(orderData?.message || 'No se pudo crear la orden')
+  }
+
+  const orderId = orderData.id
+
+  for (const item of cart.items) {
+    const itemResponse = await fetch('/api/order-items', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${auth.token}`,
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'
+      },
+      body: JSON.stringify({
+        order_id: orderId,
+        product_id: item.id,
+        quantity: item.quantity
+      })
+    })
+
+    if (!itemResponse.ok) {
+      throw new Error('No se pudieron crear los productos del pedido')
+    }
+  }
+
+  localStorage.setItem('checkout_order_id', String(orderId))
+  return orderId
+}
+
+async function initStripeElements() {
+  if (stripePublicKeyMissing.value) {
+    throw new Error('Stripe no está configurado en el frontend')
+  }
+
+  if (!stripe.value) {
+    stripe.value = await loadStripe(stripePublicKey)
+  }
+
+  if (!stripe.value) {
+    throw new Error('No se pudo inicializar Stripe')
+  }
+
+  if (!stripeElements.value) {
+    stripeElements.value = stripe.value.elements()
+  }
+
+  await nextTick()
+
+  if (!stripeCardElement.value) {
+    stripeCardElement.value = stripeElements.value.create('card', {
+      hidePostalCode: true,
+      style: {
+        base: {
+          fontSize: '16px',
+          color: '#2c3e50',
+          '::placeholder': {
+            color: '#95a5a6'
+          }
+        }
+      }
+    })
+  }
+
+  if (cardElementRef.value && !cardElementRef.value.hasChildNodes()) {
+    stripeCardElement.value.mount(cardElementRef.value)
+  }
+}
+
+function destroyStripeElement() {
+  if (stripeCardElement.value) {
+    stripeCardElement.value.unmount()
+  }
+}
+
+async function startStripePayment(orderId) {
+  await initStripeElements()
+
+  if (!stripeCardElement.value) {
+    throw new Error('No se pudo inicializar el formulario de tarjeta')
+  }
+
+  const response = await fetch(`/api/orders/${orderId}/payments/stripe`, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${auth.token}`,
+      'Content-Type': 'application/json',
+      'Accept': 'application/json'
+    },
+    body: JSON.stringify({
+      amount: totalAmount.value,
+      currency: 'eur'
+    })
+  })
+
+  const contentType = response.headers.get('content-type') || ''
+  const data = contentType.includes('application/json') ? await response.json() : null
+
+  if (!response.ok) {
+    throw new Error(data?.message || 'No se pudo iniciar el pago con Stripe')
+  }
+
+  stripeClientSecret.value = data?.client_secret || null
+
+  if (!stripeClientSecret.value) {
+    throw new Error('Stripe no devolvió client_secret')
+  }
+
+  const { error: stripeError, paymentIntent } = await stripe.value.confirmCardPayment(
+    stripeClientSecret.value,
+    {
+      payment_method: {
+        card: stripeCardElement.value,
+        billing_details: {
+          name: formData.value.cardName
+        }
+      }
+    }
+  )
+
+  if (stripeError) {
+    throw new Error(stripeError.message || 'No se pudo confirmar el pago con Stripe')
+  }
+
+  if (!paymentIntent || paymentIntent.status !== 'succeeded') {
+    throw new Error('El pago no fue completado por Stripe')
+  }
+
+  orderNumber.value = String(orderId)
+}
+
+async function createCashPayment(orderId) {
+  const response = await fetch(`/api/orders/${orderId}/payments/cash`, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${auth.token}`,
+      'Content-Type': 'application/json',
+      'Accept': 'application/json'
+    },
+    body: JSON.stringify({
+      amount: totalAmount.value,
+      currency: 'eur'
+    })
+  })
+
+  const contentType = response.headers.get('content-type') || ''
+  const data = contentType.includes('application/json') ? await response.json() : null
+
+  if (!response.ok) {
+    throw new Error(data?.message || 'No se pudo crear el pago en efectivo')
+  }
+}
+
+watch(() => formData.value.paymentMethod, async (method) => {
+  if (method === 'card') {
+    try {
+      await initStripeElements()
+    } catch (err) {
+      error.value = err.message
+    }
+  } else {
+    destroyStripeElement()
+  }
+})
+
+onBeforeUnmount(() => {
+  destroyStripeElement()
+})
 </script>
 
 <style scoped>
@@ -348,6 +533,24 @@ function goHome() {
   padding: 1rem;
   background: #f8f9fa;
   border-radius: 5px;
+}
+
+.stripe-card-element {
+  background: white;
+  border: 2px solid #ecf0f1;
+  border-radius: 5px;
+  padding: 0.75rem;
+  min-height: 44px;
+}
+
+.stripe-hint {
+  margin: 0.75rem 0 0;
+  color: #7f8c8d;
+  font-size: 0.9rem;
+}
+
+.stripe-error {
+  color: #c0392b;
 }
 
 .error-message {
