@@ -25,8 +25,8 @@
             <div class="admin-card">
               <div class="user-info">
                 <div class="user-avatar">👤</div>
-                <div class="user-details">
-                  <div class="user-name">{{ group.admin.name }}</div>
+                <div class="user-details clickable" @click="viewRelatedUsers(group.admin)">
+                  <div class="user-name admin-name-clickable">{{ group.admin.name }}</div>
                   <div class="user-email">{{ group.admin.email }}</div>
                 </div>
               </div>
@@ -241,6 +241,78 @@
         </div>
       </div>
     </div>
+
+    <!-- Related users modal -->
+    <div v-if="showRelatedModal" class="modal-overlay">
+      <div class="modal modal-related">
+        <div class="modal-header">
+          <h2>Usuarios de {{ relatedData?.admin?.name || 'Admin' }}</h2>
+          <button @click="closeRelatedModal" class="btn-close">×</button>
+        </div>
+
+        <div class="modal-body">
+          <div v-if="isLoadingRelated" class="loading-related">Cargando...</div>
+
+          <div v-else-if="relatedData">
+            <!-- Usuarios creados por el admin -->
+            <div v-if="relatedData.created_users && relatedData.created_users.length > 0" class="related-section">
+              <h3 class="related-title">👨‍💼 Usuarios creados ({{ relatedData.created_users.length }})</h3>
+              <div class="related-users-list">
+                <div v-for="user in relatedData.created_users" :key="user.id" class="related-user-card">
+                  <div class="related-user-info">
+                    <div class="related-user-avatar">
+                      {{ user.role?.name === 'caja' ? '💰' : '👨‍🍳' }}
+                    </div>
+                    <div class="related-user-details">
+                      <div class="related-user-name">{{ user.name }}</div>
+                      <div class="related-user-email">{{ user.email }}</div>
+                    </div>
+                  </div>
+                  <div class="related-user-meta">
+                    <span class="badge" :class="`badge-${user.role?.name}`">
+                      {{ user.role?.name }}
+                    </span>
+                    <span class="status-badge" :class="`status-${user.status}`">
+                      {{ user.status }}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div v-else class="no-created-users">
+              Este admin no tiene usuarios creados
+            </div>
+
+            <!-- Usuarios clientes -->
+            <div v-if="relatedData.client_users && relatedData.client_users.length > 0" class="related-section">
+              <h3 class="related-title">🛒 Clientes registrados ({{ relatedData.client_users.length }})</h3>
+              <div class="related-users-list">
+                <div v-for="client in relatedData.client_users" :key="client.id" class="related-user-card">
+                  <div class="related-user-info">
+                    <div class="related-user-avatar">🛒</div>
+                    <div class="related-user-details">
+                      <div class="related-user-name">{{ client.name }}</div>
+                      <div class="related-user-email">{{ client.email }}</div>
+                    </div>
+                  </div>
+                  <div class="related-user-meta">
+                    <span class="badge badge-cliente">Cliente</span>
+                    <span class="status-badge" :class="`status-${client.status}`">
+                      {{ client.status }}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div v-else class="no-clients">
+              No hay clientes registrados
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -256,10 +328,13 @@ const toast = ref({ show: false, type: 'success', message: '' })
 let toastTimer = null
 const showCreateForm = ref(false)
 const showDeleteModal = ref(false)
+const showRelatedModal = ref(false)
 const userToDelete = ref(null)
 const isDeleting = ref(false)
 const isCreating = ref(false)
 const createError = ref(null)
+const isLoadingRelated = ref(false)
+const relatedData = ref(null)
 const newUser = ref({
   name: '',
   email: '',
@@ -478,6 +553,46 @@ async function confirmDelete() {
   } finally {
     isDeleting.value = false
   }
+}
+
+async function viewRelatedUsers(admin) {
+  if (!auth.hasAnyRole(['superadmin', 'admin'])) {
+    showToast('No autorizado', 'error')
+    return
+  }
+
+  isLoadingRelated.value = true
+  relatedData.value = null
+  showRelatedModal.value = true
+
+  try {
+    const response = await fetch(`/api/users/${admin.id}/related`, {
+      headers: {
+        'Authorization': `Bearer ${auth.token}`,
+        'Accept': 'application/json'
+      }
+    })
+
+    if (!response.ok) throw new Error('Error al cargar usuarios relacionados')
+
+    const contentType = response.headers.get('content-type') || ''
+    if (!contentType.includes('application/json')) {
+      throw new Error('La API devolvió una respuesta inválida')
+    }
+
+    const data = await response.json()
+    relatedData.value = data
+  } catch (err) {
+    showToast(err.message, 'error')
+    showRelatedModal.value = false
+  } finally {
+    isLoadingRelated.value = false
+  }
+}
+
+function closeRelatedModal() {
+  showRelatedModal.value = false
+  relatedData.value = null
 }
 
 onMounted(() => {
@@ -994,6 +1109,138 @@ onMounted(() => {
 .client-card:hover {
   border-color: #27ae60;
   box-shadow: 0 4px 12px rgba(39, 174, 96, 0.1);
+}
+
+/* Clickable admin name */
+.clickable {
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.clickable:hover {
+  transform: translateX(3px);
+}
+
+.admin-name-clickable {
+  position: relative;
+  text-decoration: underline;
+  text-decoration-style: dotted;
+  text-decoration-color: #667eea;
+}
+
+.admin-name-clickable:hover {
+  color: #667eea;
+}
+
+/* Related users modal */
+.modal-related {
+  max-width: 700px;
+  max-height: 90vh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.modal-related .modal-body {
+  overflow-y: auto;
+  max-height: calc(90vh - 120px);
+}
+
+.loading-related {
+  text-align: center;
+  padding: 2rem;
+  color: #7f8c8d;
+}
+
+.related-section {
+  margin-bottom: 2rem;
+}
+
+.related-section:last-child {
+  margin-bottom: 0;
+}
+
+.related-title {
+  color: #2c3e50;
+  font-size: 1.1rem;
+  font-weight: 600;
+  margin-bottom: 1rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 2px solid #ecf0f1;
+}
+
+.related-users-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.related-user-card {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  background: #f8fafb;
+  padding: 1rem;
+  border-radius: 8px;
+  border: 1px solid #e8eef3;
+  transition: all 0.2s ease;
+}
+
+.related-user-card:hover {
+  background: white;
+  border-color: #667eea;
+  box-shadow: 0 2px 8px rgba(102, 126, 234, 0.1);
+}
+
+.related-user-info {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex: 1;
+}
+
+.related-user-avatar {
+  width: 40px;
+  height: 40px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.2rem;
+}
+
+.related-user-details {
+  flex: 1;
+}
+
+.related-user-name {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: #2c3e50;
+  margin-bottom: 0.25rem;
+}
+
+.related-user-email {
+  font-size: 0.85rem;
+  color: #7f8c8d;
+}
+
+.related-user-meta {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.no-created-users,
+.no-clients {
+  text-align: center;
+  padding: 1.5rem;
+  color: #7f8c8d;
+  background: #f8fafb;
+  border-radius: 8px;
+  margin-bottom: 1rem;
 }
 
 @media (max-width: 768px) {

@@ -214,6 +214,52 @@ class UserController extends Controller
     }
 
     /**
+     * Get related users for an admin.
+     * Returns users created by the admin AND all client users.
+     */
+    public function getRelatedUsers(Request $request, User $admin)
+    {
+        $currentUser = $request->user();
+
+        // Only superadmin and admin can access this
+        if (!$currentUser->hasAnyRole(['superadmin', 'admin'])) {
+            return response()->json(['message' => 'Unauthorized'], 403);
+        }
+
+        // Verify the target user is an admin
+        if ($admin->role?->name !== 'admin') {
+            return response()->json(['message' => 'User is not an admin'], 422);
+        }
+
+        // Get users created by this admin
+        $createdUsers = User::with('role')
+            ->where('created_by', $admin->id)
+            ->whereHas('role', function($query) {
+                $query->whereIn('name', ['caja', 'cocina']);
+            })
+            ->get()
+            ->map(function($user) {
+                return $this->formatUser($user);
+            });
+
+        // Get all client users
+        $clientUsers = User::with('role')
+            ->whereHas('role', function($query) {
+                $query->where('name', 'cliente');
+            })
+            ->get()
+            ->map(function($user) {
+                return $this->formatUser($user);
+            });
+
+        return response()->json([
+            'admin' => $this->formatUser($admin),
+            'created_users' => $createdUsers,
+            'client_users' => $clientUsers,
+        ]);
+    }
+
+    /**
      * Format user response.
      */
     private function formatUser($user)
