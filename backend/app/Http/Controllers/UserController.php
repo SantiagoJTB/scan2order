@@ -11,7 +11,7 @@ class UserController extends Controller
 {
     /**
      * Create a new user with specific role.
-     * Superadmin can create Admin, Admin, Caja, Cocina
+     * Superadmin can create Admin, Caja, Cocina, Cliente
      * Admin can create Caja, Cocina
      */
     public function store(Request $request)
@@ -38,13 +38,18 @@ class UserController extends Controller
         }
 
         // Only superadmin can create admin users
-        // Regular admin can only create caja, cocina, and cliente
+        // Regular admin can only create caja and cocina
         if ($data['role'] === 'admin' && !$user->hasRole('superadmin')) {
             return response()->json(['message' => 'Only superadmin can create admin users'], 403);
         }
 
-        if ($user->hasRole('admin') && !$user->hasRole('superadmin') && !in_array($data['role'], ['caja', 'cocina', 'cliente'])) {
-            return response()->json(['message' => 'Admin can only create caja, cocina, and cliente users'], 403);
+        // Only superadmin can create cliente users
+        if ($data['role'] === 'cliente' && !$user->hasRole('superadmin')) {
+            return response()->json(['message' => 'Only superadmin can create cliente users'], 403);
+        }
+
+        if ($user->hasRole('admin') && !$user->hasRole('superadmin') && !in_array($data['role'], ['caja', 'cocina'])) {
+            return response()->json(['message' => 'Admin can only create caja and cocina users'], 403);
         }
 
         // When creating admin, also create caja and cocina
