@@ -7,8 +7,9 @@ Sistema de gestión de pedidos de restaurantes con autenticación multi-rol y ca
 1. [Roles y Permisos](#roles-y-permisos)
 2. [Acceso Inicial](#acceso-inicial)
 3. [Flujo por Rol](#flujo-por-rol)
-4. [Operaciones Comunes](#operaciones-comunes)
-5. [Datos de Prueba](#datos-de-prueba)
+4. [API Endpoints y Vistas](#api-endpoints-y-vistas)
+5. [Operaciones Comunes](#operaciones-comunes)
+6. [Datos de Prueba](#datos-de-prueba)
 
 ---
 
@@ -210,7 +211,253 @@ El sistema tiene **5 roles jerárquicos** con permisos específicos:
 
 ---
 
-## Operaciones Comunes
+## API Endpoints y Vistas
+
+Documentación completa de todos los endpoints, views asociadas y permisos de acceso.
+
+### 🔓 ENDPOINTS PÚBLICOS (Sin Autenticación)
+
+#### Login
+- **Endpoint:** `POST /api/login`
+- **View/Componente:** `src/views/Login.vue`
+- **Acceso:** Cualquiera (no autenticado)
+- **Parámetros:**
+  ```json
+  {
+    "email": "usuario@example.com",
+    "password": "password123"
+  }
+  ```
+- **Respuesta:** Token de acceso + Datos del usuario + Rol + Permisos
+- **Uso:** Primera entrada al sistema
+
+#### Registro
+- **Endpoint:** `POST /api/register`
+- **View/Componente:** `src/views/Register.vue`
+- **Acceso:** Cualquiera (no autenticado)
+- **Parámetros:**
+  ```json
+  {
+    "name": "Juan Pérez",
+    "email": "cliente@example.com",
+    "password": "password123"
+  }
+  ```
+- **Respuesta:** Usuario creado con rol **Cliente** automático
+- **Uso:** Crear nuevas cuentas de cliente (auto-asigna rol cliente)
+
+#### Obtener Productos
+- **Endpoint:** `GET /api/products`
+- **View/Componente:** `src/views/client/Menu.vue`
+- **Acceso:** Todos (autenticados y no autenticados)
+- **Parámetros:** Ninguno (opcional: filtros de búsqueda)
+- **Respuesta:** Lista de productos con nombre, descripción, precio, imagen
+- **Uso:** Mostrar carta de restaurante
+
+#### Health Check
+- **Endpoint:** `GET /api/hello`
+- **Acceso:** Cualquiera (sin autenticación)
+- **Respuesta:** `{"message": "Hello World"}`
+- **Uso:** Verificar que el API está disponible
+
+---
+
+### 🔒 ENDPOINTS PROTEGIDOS (Requieren Token Bearer)
+
+> **Nota:** Todo endpoint protegido requiere header:
+> ```
+> Authorization: Bearer {token}
+> ```
+
+#### Logout
+- **Endpoint:** `POST /api/logout`
+- **View/Componente:** `src/App.vue` (Menú de usuario)
+- **Acceso:** ✅ Todos los roles autenticados
+- **Autorización:** Cualquier usuario autenticado
+- **Parámetros:** Ninguno
+- **Respuesta:** `{"message": "Logged out successfully"}`
+- **Uso:** Cerrar sesión y revocar token
+
+#### Obtener Perfil Actual
+- **Endpoint:** `GET /api/me`
+- **View/Componente:** `src/App.vue`, Componentes privadas
+- **Acceso:** ✅ Todos los roles autenticados
+- **Autorización:** Solo el usuario autenticado
+- **Parámetros:** Ninguno
+- **Respuesta:** Usuario actual con rol, permisos y datos completos
+- **Uso:** Mostrar información del usuario en el UI
+
+---
+
+### 🏢 ENDPOINTS DE GESTIÓN DE USUARIOS
+
+#### Crear Usuario
+- **Endpoint:** `POST /api/users`
+- **View/Componente:** `src/views/admin/Users.vue` (Modal)
+- **Acceso:** ❌ Cliente, Caja, Cocina
+- **Acceso:** ✅ **Admin**, **Superadmin**
+- **Autorización:**
+  - **Admin:** Puede crear Admin, Caja, Cocina
+  - **Superadmin:** Puede crear cualquier rol
+- **Parámetros:**
+  ```json
+  {
+    "name": "Juan García",
+    "email": "admin@restaurant.local",
+    "password": "segura123",
+    "phone": "+34912345678",
+    "role_id": 2
+  }
+  ```
+- **Respuesta Especial (Admin crea Admin):** Se generan automáticamente 2 usuarios adicionales (Caja + Cocina)
+- **Uso:** Crear nuevas cuentas de personal
+
+#### Listar Usuarios
+- **Endpoint:** `GET /api/users`
+- **View/Componente:** `src/views/admin/Users.vue` (Tabla)
+- **Acceso:** ❌ Cliente, Caja, Cocina
+- **Acceso:** ✅ **Admin**, **Superadmin**
+- **Autorización:**
+  - **Admin:** Ve solo usuarios que creó
+  - **Superadmin:** Ve todos los usuarios
+- **Parámetros:** `page`, `limit` (paginación)
+- **Respuesta:** Array de usuarios con rol, status, datos personales
+- **Uso:** Mostrar lista de empleados
+
+#### Ver Usuario
+- **Endpoint:** `GET /api/users/{id}`
+- **View/Componente:** `src/views/admin/Users.vue` (Detalles)
+- **Acceso:** ❌ Cliente, Caja, Cocina
+- **Acceso:** ✅ **Admin**, **Superadmin**
+- **Autorización:**
+  - **Admin:** Solo ve usuarios que creó
+  - **Superadmin:** Ve cualquier usuario
+  - Usuario puede verse a sí mismo
+- **Parámetros:** `{id}` = ID del usuario
+- **Respuesta:** Objeto usuario completo
+- **Uso:** Ver detalles de un empleado específico
+
+#### Cambiar Estado de Usuario
+- **Endpoint:** `PATCH /api/users/{id}/status`
+- **View/Componente:** `src/views/admin/Users.vue` (Botones de estado)
+- **Acceso:** ❌ Cliente, Caja, Cocina
+- **Acceso:** ✅ **Admin**, **Superadmin**
+- **Autorización:**
+  - **Admin:** Solo usuarios que creó
+  - **Superadmin:** Cualquier usuario
+- **Parámetros:**
+  ```json
+  {
+    "status": "active" | "inactive" | "suspended"
+  }
+  ```
+- **Respuesta:** Usuario actualizado con nuevo estado
+- **Uso:** Activar/desactivar empleados
+
+---
+
+### 📊 RESUMEN DE ACCESO POR ROLE
+
+| Endpoint | Cliente | Caja | Cocina | Admin | Superadmin |
+|----------|---------|------|--------|-------|------------|
+| POST /api/login | ✅ | ✅ | ✅ | ✅ | ✅ |
+| POST /api/register | ✅ | ✅ | ✅ | ✅ | ✅ |
+| GET /api/products | ✅ | ✅ | ✅ | ✅ | ✅ |
+| GET /api/hello | ✅ | ✅ | ✅ | ✅ | ✅ |
+| POST /api/logout | ✅ | ✅ | ✅ | ✅ | ✅ |
+| GET /api/me | ✅ | ✅ | ✅ | ✅ | ✅ |
+| POST /api/users | ❌ | ❌ | ❌ | ✅ | ✅ |
+| GET /api/users | ❌ | ❌ | ❌ | ✅ | ✅ |
+| GET /api/users/{id} | ❌ | ❌ | ❌ | ✅ | ✅ |
+| PATCH /api/users/{id}/status | ❌ | ❌ | ❌ | ✅ | ✅ |
+
+---
+
+### 🎨 ARQUITECTURA DE VISTAS
+
+```
+src/
+├── views/
+│   ├── Login.vue                    # [PUBLIC] Formulario de login
+│   ├── Register.vue                 # [PUBLIC] Formulario de registro
+│   ├── client/
+│   │   ├── Menu.vue                 # [CLIENTE] Mostrar productos
+│   │   ├── Cart.vue                 # [CLIENTE] Revisar carrito
+│   │   └── Checkout.vue             # [CLIENTE] Completar compra
+│   ├── admin/
+│   │   ├── Dashboard.vue            # [ADMIN + SUPERADMIN] Panel estadísticas
+│   │   └── Users.vue                # [ADMIN + SUPERADMIN] Gestión usuarios
+│   ├── caja/
+│   │   └── Payments.vue             # [CAJA] Panel de pagos
+│   └── cocina/
+│       └── Orders.vue               # [COCINA] Panel de órdenes
+├── stores/
+│   ├── auth.js                      # Gestión de autenticación y token
+│   └── cart.js                      # Gestión del carrito
+├── router/
+│   └── index.js                     # Enrutamiento y guards
+└── App.vue                          # Componente raíz con navbar
+
+```
+
+---
+
+### 🔐 FLUJO DE AUTENTICACIÓN
+
+```
+1. Usuario no autenticado
+   ↓
+2. Accede a http://localhost:8080
+   ↓
+3. Router guard verifica isAuthenticated
+   ↓
+4. Redirige a /login (sin token)
+   ↓
+5. Usuario completa formulario
+   ↓
+6. POST /api/login con email + password
+   ↓
+7. Backend valida credenciales
+   ↓
+8. De vuelta: token + user + role + permissions
+   ↓
+9. Frontend almacena en localStorage
+   ↓
+10. Auth store se actualiza
+    ↓
+11. Router detecta isAuthenticated = true
+    ↓
+12. Redirige a dashboard según rol:
+    - Cliente → /menu
+    - Admin → /admin
+    - Caja → /caja
+    - Cocina → /cocina
+    - Superadmin → /admin
+```
+
+---
+
+### 🛡️ ROUTE GUARDS
+
+El router valida en cada navegación:
+
+```javascript
+// Validaciones en beforeEach:
+1. ¿Está autenticado? → Si no, redirige a /login
+2. ¿Tiene permiso para esta ruta? → Si no, redirige al dashboard de su rol
+3. ¿La ruta es pública? → Permite acceso sin token
+```
+
+**Rutas protegidas por rol:**
+- `/menu` → Solo Cliente
+- `/cart` → Solo Cliente
+- `/checkout` → Solo Cliente
+- `/admin` → Admin + Superadmin
+- `/admin/users` → Admin + Superadmin
+- `/caja` → Solo Caja
+- `/cocina` → Solo Cocina
+
+
 
 ### Cerrar Sesión
 
