@@ -93,7 +93,10 @@ class User extends Authenticatable
      */
     public function hasRole($roleName)
     {
-        return $this->role()->where('name', $roleName)->exists();
+        if (!$this->role) {
+            return false;
+        }
+        return $this->role->name === $roleName;
     }
 
     /**
@@ -102,7 +105,10 @@ class User extends Authenticatable
     public function hasAnyRole($roles)
     {
         $roles = is_array($roles) ? $roles : func_get_args();
-        return $this->role()->whereIn('name', $roles)->exists();
+        if (!$this->role) {
+            return false;
+        }
+        return in_array($this->role->name, $roles);
     }
 
     /**

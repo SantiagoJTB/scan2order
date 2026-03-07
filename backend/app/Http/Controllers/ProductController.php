@@ -14,6 +14,12 @@ class ProductController extends Controller
     protected function authorizeRestaurant($restaurantId)
     {
         $user = Auth::user();
+        
+        // Ensure role is loaded
+        if (!$user->relationLoaded('role')) {
+            $user->load('role');
+        }
+        
         $restaurant = Restaurant::find($restaurantId);
 
         if (!$restaurant) {
