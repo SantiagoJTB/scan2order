@@ -25,8 +25,8 @@
             <div class="admin-card">
               <div class="user-info">
                 <div class="user-avatar">👤</div>
-                <div class="user-details clickable" @click="viewRelatedUsers(group.admin)">
-                  <div class="user-name admin-name-clickable">{{ group.admin.name }}</div>
+                <div class="user-details">
+                  <div class="user-name">{{ group.admin.name }}</div>
                   <div class="user-email">{{ group.admin.email }}</div>
                 </div>
               </div>
@@ -37,6 +37,14 @@
                 </span>
               </div>
               <div class="user-actions">
+                <button
+                  v-if="canEditUser(group.admin)"
+                  @click="openEditModal(group.admin)"
+                  class="btn-action"
+                  title="Editar usuario"
+                >
+                  ✏️
+                </button>
                 <button 
                   v-if="canChangeStatus(group.admin)"
                   @click="changeStatus(group.admin)" 
@@ -77,6 +85,14 @@
                   </span>
                 </div>
                 <div class="user-actions">
+                  <button
+                    v-if="canEditUser(member)"
+                    @click="openEditModal(member)"
+                    class="btn-edit-small"
+                    title="Editar usuario"
+                  >
+                    ✏️
+                  </button>
                   <button 
                     v-if="canChangeStatus(member)"
                     @click="changeStatus(member)" 
@@ -119,6 +135,14 @@
                 </span>
               </div>
               <div class="user-actions">
+                <button
+                  v-if="canEditUser(client)"
+                  @click="openEditModal(client)"
+                  class="btn-action"
+                  title="Editar usuario"
+                >
+                  ✏️
+                </button>
                 <button 
                   v-if="canChangeStatus(client)"
                   @click="changeStatus(client)" 
@@ -168,19 +192,29 @@
             </span>
           </div>
           <div class="col-actions">
+            <button
+              v-if="canEditUser(user)"
+              @click="openEditModal(user)"
+              class="btn-action"
+              title="Editar usuario"
+            >
+              ✏️
+            </button>
             <button 
               v-if="canChangeStatus(user)"
               @click="changeStatus(user)" 
               class="btn-action"
+              title="Cambiar estado"
             >
-              Cambiar estado
+              🔄
             </button>
             <button 
               v-if="canDeleteUser(user)"
               @click="openDeleteModal(user)" 
               class="btn-delete"
+              title="Eliminar usuario"
             >
-              Eliminar
+              🗑️
             </button>
           </div>
         </div>
@@ -266,6 +300,60 @@
       </div>
     </div>
 
+    <div v-if="showEditModal" class="modal-overlay">
+      <div class="modal">
+        <div class="modal-header">
+          <h2>Editar usuario</h2>
+          <button @click="cancelEdit" class="btn-close">×</button>
+        </div>
+
+        <form @submit.prevent="confirmEdit" class="modal-body">
+          <div class="form-group">
+            <label for="edit-name">Nombre:</label>
+            <input
+              v-model="editUser.name"
+              type="text"
+              id="edit-name"
+              placeholder="Nombre completo"
+              required
+            />
+          </div>
+
+          <div class="form-group">
+            <label for="edit-email">Email:</label>
+            <input
+              v-model="editUser.email"
+              type="email"
+              id="edit-email"
+              placeholder="email@example.com"
+              required
+            />
+          </div>
+
+          <div class="form-group">
+            <label for="edit-phone">Teléfono:</label>
+            <input
+              v-model="editUser.phone"
+              type="tel"
+              id="edit-phone"
+              placeholder="Teléfono"
+            />
+          </div>
+
+          <div v-if="editError" class="error">{{ editError }}</div>
+
+          <div class="form-actions">
+            <button type="button" @click="cancelEdit" class="btn-cancel" :disabled="isUpdating">
+              Cancelar
+            </button>
+            <button type="submit" :disabled="isUpdating" class="btn-save">
+              {{ isUpdating ? 'Guardando...' : 'Guardar cambios' }}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+
     <div v-if="showDeleteModal" class="modal-overlay">
       <div class="modal modal-delete">
         <div class="modal-header">
@@ -276,12 +364,20 @@
         <div class="modal-body">
           <p class="delete-message">¿Seguro que quieres eliminar este usuario?</p>
           <p class="delete-user-name">{{ userToDelete?.name }} ({{ userToDelete?.email }})</p>
+          <p v-if="userToDelete?.role?.name === 'admin'" class="delete-warning">
+            Al eliminar este admin también se eliminarán sus cuentas vinculadas.
+          </p>
+
+          <label class="delete-confirm-check">
+            <input v-model="deleteConfirmed" type="checkbox" />
+            Sí, deseo eliminar este usuario
+          </label>
 
           <div class="form-actions">
             <button type="button" @click="cancelDelete" class="btn-cancel" :disabled="isDeleting">
               Cancelar
             </button>
-            <button type="button" @click="confirmDelete" class="btn-delete-confirm" :disabled="isDeleting">
+            <button type="button" @click="confirmDelete" class="btn-delete-confirm" :disabled="isDeleting || !deleteConfirmed">
               {{ isDeleting ? 'Eliminando...' : 'Eliminar' }}
             </button>
           </div>
@@ -289,77 +385,6 @@
       </div>
     </div>
 
-    <!-- Related users modal -->
-    <div v-if="showRelatedModal" class="modal-overlay">
-      <div class="modal modal-related">
-        <div class="modal-header">
-          <h2>Usuarios de {{ relatedData?.admin?.name || 'Admin' }}</h2>
-          <button @click="closeRelatedModal" class="btn-close">×</button>
-        </div>
-
-        <div class="modal-body">
-          <div v-if="isLoadingRelated" class="loading-related">Cargando...</div>
-
-          <div v-else-if="relatedData">
-            <!-- Usuarios creados por el admin -->
-            <div v-if="relatedData.created_users && relatedData.created_users.length > 0" class="related-section">
-              <h3 class="related-title">👨‍💼 Usuarios creados ({{ relatedData.created_users.length }})</h3>
-              <div class="related-users-list">
-                <div v-for="user in relatedData.created_users" :key="user.id" class="related-user-card">
-                  <div class="related-user-info">
-                    <div class="related-user-avatar">
-                      {{ user.role?.name === 'caja' ? '💰' : '👨‍🍳' }}
-                    </div>
-                    <div class="related-user-details">
-                      <div class="related-user-name">{{ user.name }}</div>
-                      <div class="related-user-email">{{ user.email }}</div>
-                    </div>
-                  </div>
-                  <div class="related-user-meta">
-                    <span class="badge" :class="`badge-${user.role?.name}`">
-                      {{ user.role?.name }}
-                    </span>
-                    <span class="status-badge" :class="`status-${user.status}`">
-                      {{ user.status }}
-                    </span>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div v-else class="no-created-users">
-              Este admin no tiene usuarios creados
-            </div>
-
-            <!-- Usuarios clientes -->
-            <div v-if="relatedData.client_users && relatedData.client_users.length > 0" class="related-section">
-              <h3 class="related-title">🛒 Clientes registrados ({{ relatedData.client_users.length }})</h3>
-              <div class="related-users-list">
-                <div v-for="client in relatedData.client_users" :key="client.id" class="related-user-card">
-                  <div class="related-user-info">
-                    <div class="related-user-avatar">🛒</div>
-                    <div class="related-user-details">
-                      <div class="related-user-name">{{ client.name }}</div>
-                      <div class="related-user-email">{{ client.email }}</div>
-                    </div>
-                  </div>
-                  <div class="related-user-meta">
-                    <span class="badge badge-cliente">Cliente</span>
-                    <span class="status-badge" :class="`status-${client.status}`">
-                      {{ client.status }}
-                    </span>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div v-else class="no-clients">
-              No hay clientes registrados
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
   </div>
 </template>
 
@@ -374,14 +399,21 @@ const error = ref(null)
 const toast = ref({ show: false, type: 'success', message: '' })
 let toastTimer = null
 const showCreateForm = ref(false)
+const showEditModal = ref(false)
 const showDeleteModal = ref(false)
-const showRelatedModal = ref(false)
+const userToEdit = ref(null)
 const userToDelete = ref(null)
+const deleteConfirmed = ref(false)
 const isDeleting = ref(false)
 const isCreating = ref(false)
+const isUpdating = ref(false)
 const createError = ref(null)
-const isLoadingRelated = ref(false)
-const relatedData = ref(null)
+const editError = ref(null)
+const editUser = ref({
+  name: '',
+  email: '',
+  phone: ''
+})
 const newUser = ref({
   name: '',
   email: '',
@@ -415,6 +447,13 @@ const canManageUsers = computed(() => auth.hasAnyRole(['superadmin', 'admin']))
 
 function canDeleteUser(user) {
   // No se puede eliminar a uno mismo
+  if (user.id === auth.user?.id) {
+    return false
+  }
+  return true
+}
+
+function canEditUser(user) {
   if (user.id === auth.user?.id) {
     return false
   }
@@ -562,6 +601,77 @@ async function changeStatus(user) {
   }
 }
 
+function openEditModal(user) {
+  if (!canManageUsers.value) {
+    showToast('No autorizado para editar usuarios', 'error')
+    return
+  }
+
+  userToEdit.value = user
+  editError.value = null
+  editUser.value = {
+    name: user.name || '',
+    email: user.email || '',
+    phone: user.phone || ''
+  }
+  showEditModal.value = true
+}
+
+function cancelEdit() {
+  showEditModal.value = false
+  userToEdit.value = null
+  editError.value = null
+  editUser.value = { name: '', email: '', phone: '' }
+}
+
+async function confirmEdit() {
+  if (!canManageUsers.value) {
+    showToast('No autorizado para editar usuarios', 'error')
+    return
+  }
+
+  if (!userToEdit.value) return
+
+  isUpdating.value = true
+  editError.value = null
+
+  try {
+    const response = await fetch(`/api/users/${userToEdit.value.id}`, {
+      method: 'PATCH',
+      headers: {
+        'Authorization': `Bearer ${auth.token}`,
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'
+      },
+      body: JSON.stringify({
+        name: editUser.value.name,
+        email: editUser.value.email,
+        phone: editUser.value.phone || null
+      })
+    })
+
+    const contentType = response.headers.get('content-type') || ''
+    let data = null
+
+    if (contentType.includes('application/json')) {
+      data = await response.json()
+    }
+
+    if (!response.ok) {
+      throw new Error(data?.message || 'Error al editar usuario')
+    }
+
+    cancelEdit()
+    await fetchUsers()
+    showToast('Usuario actualizado correctamente', 'success')
+  } catch (err) {
+    editError.value = err.message
+    showToast(err.message, 'error')
+  } finally {
+    isUpdating.value = false
+  }
+}
+
 function openDeleteModal(user) {
   if (!canManageUsers.value) {
     showToast('No autorizado para eliminar usuarios', 'error')
@@ -569,12 +679,14 @@ function openDeleteModal(user) {
   }
 
   userToDelete.value = user
+  deleteConfirmed.value = false
   showDeleteModal.value = true
 }
 
 function cancelDelete() {
   showDeleteModal.value = false
   userToDelete.value = null
+  deleteConfirmed.value = false
 }
 
 async function confirmDelete() {
@@ -616,46 +728,6 @@ async function confirmDelete() {
   } finally {
     isDeleting.value = false
   }
-}
-
-async function viewRelatedUsers(admin) {
-  if (!auth.hasAnyRole(['superadmin', 'admin'])) {
-    showToast('No autorizado', 'error')
-    return
-  }
-
-  isLoadingRelated.value = true
-  relatedData.value = null
-  showRelatedModal.value = true
-
-  try {
-    const response = await fetch(`/api/users/${admin.id}/related`, {
-      headers: {
-        'Authorization': `Bearer ${auth.token}`,
-        'Accept': 'application/json'
-      }
-    })
-
-    if (!response.ok) throw new Error('Error al cargar usuarios relacionados')
-
-    const contentType = response.headers.get('content-type') || ''
-    if (!contentType.includes('application/json')) {
-      throw new Error('La API devolvió una respuesta inválida')
-    }
-
-    const data = await response.json()
-    relatedData.value = data
-  } catch (err) {
-    showToast(err.message, 'error')
-    showRelatedModal.value = false
-  } finally {
-    isLoadingRelated.value = false
-  }
-}
-
-function closeRelatedModal() {
-  showRelatedModal.value = false
-  relatedData.value = null
 }
 
 onMounted(() => {
@@ -888,6 +960,27 @@ onMounted(() => {
   word-break: break-word;
 }
 
+.delete-warning {
+  margin: 0 0 1rem;
+  color: #b23b2a;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.delete-confirm-check {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+  color: #2c3e50;
+  font-size: 0.95rem;
+}
+
+.delete-confirm-check input {
+  width: 16px;
+  height: 16px;
+}
+
 /* Modal styles */
 .modal-overlay {
   position: fixed;
@@ -1040,6 +1133,12 @@ onMounted(() => {
   gap: 1rem;
 }
 
+.client-card .user-info {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
 .user-avatar {
   width: 50px;
   height: 50px;
@@ -1051,6 +1150,11 @@ onMounted(() => {
   font-size: 1.5rem;
 }
 
+.client-card .user-avatar {
+  width: 60px;
+  height: 60px;
+  font-size: 2rem;
+}
 .user-avatar-small {
   width: 35px;
   height: 35px;
@@ -1066,6 +1170,9 @@ onMounted(() => {
   flex: 1;
 }
 
+.client-card .user-details {
+  flex: 1;
+}
 .user-name {
   font-size: 1.1rem;
   font-weight: 600;
@@ -1073,6 +1180,10 @@ onMounted(() => {
   margin-bottom: 0.25rem;
 }
 
+.client-card .user-name {
+  font-size: 1.2rem;
+  margin-bottom: 0.5rem;
+}
 .user-email {
   font-size: 0.9rem;
   color: #7f8c8d;
@@ -1096,11 +1207,32 @@ onMounted(() => {
   align-items: center;
 }
 
+.client-card .user-meta {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin-bottom: 1rem;
+}
 .user-actions {
   display: flex;
   gap: 0.5rem;
 }
 
+.client-card .user-actions {
+  display: flex;
+  gap: 0.75rem;
+  justify-content: flex-end;
+  border-top: 1px solid #ecf0f1;
+  padding-top: 1rem;
+}
+
+.client-card .btn-action,
+.client-card .btn-delete {
+  flex: 1;
+  padding: 0.6rem 0.8rem;
+  font-size: 0.9rem;
+  border-radius: 6px;
+}
 .btn-action-small {
   padding: 0.4rem 0.8rem;
   background: #667eea;
@@ -1113,6 +1245,21 @@ onMounted(() => {
 }
 
 .btn-action-small:hover {
+  opacity: 0.8;
+}
+
+.btn-edit-small {
+  padding: 0.4rem 0.8rem;
+  background: #667eea;
+  color: white;
+  border: none;
+  border-radius: 3px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  transition: opacity 0.3s ease;
+}
+
+.btn-edit-small:hover {
   opacity: 0.8;
 }
 
@@ -1158,152 +1305,20 @@ onMounted(() => {
 }
 
 .client-card {
-  display: grid;
-  grid-template-columns: 2fr 1.5fr auto;
-  align-items: center;
-  gap: 1rem;
+  display: flex;
+  flex-direction: column;
   background: white;
-  padding: 1.25rem;
-  border-radius: 8px;
+  padding: 1.5rem;
+  border-radius: 12px;
   border: 2px solid #e8eef3;
   transition: all 0.3s ease;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
 }
 
 .client-card:hover {
   border-color: #27ae60;
-  box-shadow: 0 4px 12px rgba(39, 174, 96, 0.1);
-}
-
-/* Clickable admin name */
-.clickable {
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.clickable:hover {
-  transform: translateX(3px);
-}
-
-.admin-name-clickable {
-  position: relative;
-  text-decoration: underline;
-  text-decoration-style: dotted;
-  text-decoration-color: #667eea;
-}
-
-.admin-name-clickable:hover {
-  color: #667eea;
-}
-
-/* Related users modal */
-.modal-related {
-  max-width: 700px;
-  max-height: 90vh;
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
-}
-
-.modal-related .modal-body {
-  overflow-y: auto;
-  max-height: calc(90vh - 120px);
-}
-
-.loading-related {
-  text-align: center;
-  padding: 2rem;
-  color: #7f8c8d;
-}
-
-.related-section {
-  margin-bottom: 2rem;
-}
-
-.related-section:last-child {
-  margin-bottom: 0;
-}
-
-.related-title {
-  color: #2c3e50;
-  font-size: 1.1rem;
-  font-weight: 600;
-  margin-bottom: 1rem;
-  padding-bottom: 0.5rem;
-  border-bottom: 2px solid #ecf0f1;
-}
-
-.related-users-list {
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
-}
-
-.related-user-card {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 1rem;
-  background: #f8fafb;
-  padding: 1rem;
-  border-radius: 8px;
-  border: 1px solid #e8eef3;
-  transition: all 0.2s ease;
-}
-
-.related-user-card:hover {
-  background: white;
-  border-color: #667eea;
-  box-shadow: 0 2px 8px rgba(102, 126, 234, 0.1);
-}
-
-.related-user-info {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  flex: 1;
-}
-
-.related-user-avatar {
-  width: 40px;
-  height: 40px;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 1.2rem;
-}
-
-.related-user-details {
-  flex: 1;
-}
-
-.related-user-name {
-  font-size: 0.95rem;
-  font-weight: 600;
-  color: #2c3e50;
-  margin-bottom: 0.25rem;
-}
-
-.related-user-email {
-  font-size: 0.85rem;
-  color: #7f8c8d;
-}
-
-.related-user-meta {
-  display: flex;
-  gap: 0.5rem;
-  align-items: center;
-}
-
-.no-created-users,
-.no-clients {
-  text-align: center;
-  padding: 1.5rem;
-  color: #7f8c8d;
-  background: #f8fafb;
-  border-radius: 8px;
-  margin-bottom: 1rem;
+  box-shadow: 0 8px 16px rgba(39, 174, 96, 0.15);
+  transform: translateY(-3px);
 }
 
 .empty-section {

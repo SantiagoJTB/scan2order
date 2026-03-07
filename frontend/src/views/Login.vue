@@ -35,7 +35,7 @@
 
 <script setup>
 import { ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 
 const email = ref('')
@@ -43,7 +43,16 @@ const password = ref('')
 const isLoading = ref(false)
 const error = ref(null)
 const router = useRouter()
+const route = useRoute()
 const auth = useAuthStore()
+
+function getDefaultRouteByRole(role) {
+  if (role === 'superadmin' || role === 'admin') return '/admin'
+  if (role === 'caja') return '/caja'
+  if (role === 'cocina') return '/cocina'
+  if (role === 'cliente') return '/menu'
+  return '/'
+}
 
 async function handleLogin() {
   isLoading.value = true
@@ -51,7 +60,10 @@ async function handleLogin() {
 
   try {
     await auth.login(email.value, password.value)
-    router.push('/')
+    const redirectTarget = typeof route.query.redirect === 'string'
+      ? route.query.redirect
+      : getDefaultRouteByRole(auth.userRole)
+    router.push(redirectTarget)
   } catch (err) {
     error.value = err.message
   } finally {

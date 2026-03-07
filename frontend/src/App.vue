@@ -22,6 +22,7 @@
             {{ auth.user?.name }} ▼
           </button>
           <div v-if="showUserMenu" class="dropdown-menu">
+            <router-link v-if="isCliente" to="/profile" class="dropdown-item">Mi perfil</router-link>
             <button @click="logout" class="logout-btn">Cerrar sesión</button>
           </div>
         </li>
@@ -211,6 +212,27 @@ body {
   background: #f5f5f5;
 }
 
+.dropdown-item {
+  display: block;
+  width: 100%;
+  padding: 0.75rem 1rem;
+  background: none;
+  border: none;
+  text-align: left;
+  cursor: pointer;
+  color: #2c3e50;
+  text-decoration: none;
+  font-weight: 600;
+  transition: background 0.3s ease;
+}
+
+.dropdown-item:hover {
+  background: #f5f5f5;
+}
+
+.dropdown-item:first-child {
+  border-bottom: 1px solid #ecf0f1;
+}
 .main-content {
   flex: 1;
   padding: 2rem;

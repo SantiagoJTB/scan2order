@@ -43,7 +43,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/users', [UserController::class, 'store']);
     Route::get('/users', [UserController::class, 'index']);
     Route::get('/users/{user}', [UserController::class, 'show']);
-    Route::get('/users/{user}/related', [UserController::class, 'getRelatedUsers']);
+    Route::patch('/users/{user}', [UserController::class, 'update']);
     Route::patch('/users/{user}/status', [UserController::class, 'updateStatus']);
     Route::delete('/users/{user}', [UserController::class, 'destroy']);
 });

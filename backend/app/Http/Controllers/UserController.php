@@ -6,6 +6,7 @@ use App\Models\User;
 use App\Models\Role;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\DB;
 
 class UserController extends Controller
 {
@@ -187,6 +188,49 @@ class UserController extends Controller
     }
 
     /**
+     * Update user basic information.
+     */
+    public function update(Request $request, User $user)
+    {
+        $currentUser = $request->user();
+
+        if (!$currentUser->hasAnyRole(['superadmin', 'admin'])) {
+            return response()->json(['message' => 'Unauthorized'], 403);
+        }
+
+        if ($currentUser->id === $user->id) {
+            return response()->json(['message' => 'You cannot edit your own account from this section'], 422);
+        }
+
+        if ($currentUser->hasRole('admin') && !$currentUser->hasRole('superadmin')) {
+            if ($user->created_by !== $currentUser->id) {
+                return response()->json(['message' => 'Unauthorized'], 403);
+            }
+
+            if (!in_array($user->role?->name, ['caja', 'cocina'])) {
+                return response()->json(['message' => 'Admin can only edit caja and cocina users'], 403);
+            }
+        }
+
+        $data = $request->validate([
+            'name' => 'required|string|max:255',
+            'email' => 'required|string|email|max:255|unique:users,email,' . $user->id,
+            'phone' => 'nullable|string|max:20',
+        ]);
+
+        $user->update([
+            'name' => $data['name'],
+            'email' => $data['email'],
+            'phone' => $data['phone'] ?? null,
+        ]);
+
+        return response()->json([
+            'message' => 'User updated successfully',
+            'user' => $this->formatUser($user->fresh('role'))
+        ]);
+    }
+
+    /**
      * Delete user.
      */
     public function destroy(Request $request, User $user)
@@ -211,56 +255,24 @@ class UserController extends Controller
             }
         }
 
-        $user->delete();
+        $deletedLinkedAccounts = 0;
 
-        return response()->json([
-            'message' => 'User deleted successfully'
-        ]);
-    }
+        DB::transaction(function () use ($user, &$deletedLinkedAccounts) {
+            if ($user->role?->name === 'admin') {
+                $deletedLinkedAccounts = User::where('created_by', $user->id)->delete();
+            }
 
-    /**
-     * Get related users for an admin.
-     * Returns users created by the admin AND all client users.
-     */
-    public function getRelatedUsers(Request $request, User $admin)
-    {
-        $currentUser = $request->user();
+            $user->delete();
+        });
 
-        // Only superadmin and admin can access this
-        if (!$currentUser->hasAnyRole(['superadmin', 'admin'])) {
-            return response()->json(['message' => 'Unauthorized'], 403);
+        $message = 'User deleted successfully';
+        if ($deletedLinkedAccounts > 0) {
+            $message .= " and {$deletedLinkedAccounts} linked account(s)";
         }
 
-        // Verify the target user is an admin
-        if ($admin->role?->name !== 'admin') {
-            return response()->json(['message' => 'User is not an admin'], 422);
-        }
-
-        // Get users created by this admin
-        $createdUsers = User::with('role')
-            ->where('created_by', $admin->id)
-            ->whereHas('role', function($query) {
-                $query->whereIn('name', ['caja', 'cocina']);
-            })
-            ->get()
-            ->map(function($user) {
-                return $this->formatUser($user);
-            });
-
-        // Get all client users
-        $clientUsers = User::with('role')
-            ->whereHas('role', function($query) {
-                $query->where('name', 'cliente');
-            })
-            ->get()
-            ->map(function($user) {
-                return $this->formatUser($user);
-            });
-
         return response()->json([
-            'admin' => $this->formatUser($admin),
-            'created_users' => $createdUsers,
-            'client_users' => $clientUsers,
+            'message' => $message,
+            'deleted_linked_accounts' => $deletedLinkedAccounts
         ]);
     }
 

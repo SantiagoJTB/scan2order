@@ -8,19 +8,40 @@ use Illuminate\Support\Facades\Log;
 
 class RestaurantController extends Controller
 {
-    public function index()
+    public function index(Request $request)
     {
-        return response()->json(Restaurant::all());
+        $currentUser = auth('sanctum')->user();
+
+        if ($currentUser && $currentUser->hasRole('superadmin')) {
+            return response()->json(Restaurant::all());
+        }
+
+        if ($currentUser && $currentUser->hasRole('admin')) {
+            return response()->json(
+                Restaurant::where('created_by', $currentUser->id)->get()
+            );
+        }
+
+        return response()->json(
+            Restaurant::where('active', true)->get()
+        );
     }
 
     public function store(Request $request)
     {
+        $user = $request->user();
+        if (!$user || !$user->hasAnyRole(['admin', 'superadmin'])) {
+            return response()->json(['message' => 'Unauthorized'], 403);
+        }
+
         $data = $request->validate([
             'name' => 'required|string',
             'address' => 'nullable|string',
             'phone' => 'nullable|string',
             'active' => 'boolean',
         ]);
+
+        $data['created_by'] = $user->id;
 
         try {
             $restaurant = Restaurant::create($data);
@@ -41,6 +62,15 @@ class RestaurantController extends Controller
 
     public function update(Request $request, Restaurant $restaurant)
     {
+        $user = $request->user();
+        if (!$user || !$user->hasAnyRole(['admin', 'superadmin'])) {
+            return response()->json(['message' => 'Unauthorized'], 403);
+        }
+
+        if ($user->hasRole('admin') && !$user->hasRole('superadmin') && $restaurant->created_by !== $user->id) {
+            return response()->json(['message' => 'Unauthorized'], 403);
+        }
+
         $data = $request->validate([
             'name' => 'sometimes|required|string',
             'address' => 'nullable|string',
@@ -60,6 +90,15 @@ class RestaurantController extends Controller
 
     public function destroy(Restaurant $restaurant)
     {
+        $user = request()->user();
+        if (!$user || !$user->hasAnyRole(['admin', 'superadmin'])) {
+            return response()->json(['message' => 'Unauthorized'], 403);
+        }
+
+        if ($user->hasRole('admin') && !$user->hasRole('superadmin') && $restaurant->created_by !== $user->id) {
+            return response()->json(['message' => 'Unauthorized'], 403);
+        }
+
         $restaurant->delete();
         return response()->json(null, 204);
     }

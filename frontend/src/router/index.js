@@ -9,8 +9,9 @@ import Register from '../views/Register.vue'
 // Client views
 import ClientMenu from '../views/client/Menu.vue'
 import ClientCart from '../views/client/Cart.vue'
-import ClientCheckout from '../views/client/Checkout.vue'
 
+import ClientCheckout from '../views/client/Checkout.vue'
+import ClientProfile from '../views/client/Profile.vue'
 // Admin views
 import AdminDashboard from '../views/admin/Dashboard.vue'
 import AdminUsers from '../views/admin/Users.vue'
@@ -70,7 +71,12 @@ const routes = [
     component: ClientCheckout,
     meta: { requiresAuth: true, roles: ['cliente'] }
   },
-
+  {
+    path: '/profile',
+    name: 'Profile',
+    component: ClientProfile,
+    meta: { requiresAuth: true, roles: ['cliente'] }
+  },
   // Admin routes
   {
     path: '/admin',
@@ -125,41 +131,49 @@ const router = createRouter({
   routes
 })
 
+function getDefaultRouteByRole(role) {
+  if (role === 'superadmin' || role === 'admin') return '/admin'
+  if (role === 'caja') return '/caja'
+  if (role === 'cocina') return '/cocina'
+  if (role === 'cliente') return '/menu'
+  return '/'
+}
+
 // Route guard
-router.beforeEach((to, from, next) => {
+router.beforeEach((to) => {
   const auth = useAuthStore()
 
-  // Initialize auth from storage if needed
   if (!auth.user && auth.token) {
     auth.initFromStorage()
   }
 
-  const isPublic = to.meta.public
-  const requiresAuth = to.meta.requiresAuth
-  const allowedRoles = to.meta.roles
+  const isPublic = Boolean(to.meta?.public)
+  const requiresAuth = Boolean(to.meta?.requiresAuth)
+  const allowedRoles = Array.isArray(to.meta?.roles) ? to.meta.roles : []
+  const userRole = auth.userRole
+  const defaultRoute = getDefaultRouteByRole(userRole)
 
-  // If route is public, allow
   if (isPublic) {
     if (auth.isAuthenticated && (to.name === 'Login' || to.name === 'Register')) {
-      // Redirect authenticated users away from auth pages
-      return next('/')
+      return defaultRoute
     }
-    return next()
+    return true
   }
 
-  // If route requires auth
   if (requiresAuth) {
     if (!auth.isAuthenticated) {
-      return next('/login')
+      return {
+        path: '/login',
+        query: { redirect: to.fullPath }
+      }
     }
 
-    // Check roles
-    if (allowedRoles && !allowedRoles.includes(auth.userRole)) {
-      return next('/login')
+    if (allowedRoles.length > 0 && !allowedRoles.includes(userRole)) {
+      return defaultRoute
     }
   }
 
-  next()
+  return true
 })
 
 export default router
