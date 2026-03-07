@@ -1,16 +1,33 @@
 <template>
   <div id="app" class="app-container">
-    <nav class="navbar">
+    <nav v-if="auth.isAuthenticated" class="navbar">
       <div class="nav-brand">
         <h1>Scan2Order</h1>
+        <span class="role-badge">{{ auth.userRole }}</span>
       </div>
       <ul class="nav-links">
-        <li><router-link to="/">Inicio</router-link></li>
-        <li><router-link to="/restaurants">Restaurantes</router-link></li>
-        <li><router-link to="/orders">Pedidos</router-link></li>
-        <li><router-link to="/products">Productos</router-link></li>
+        <li v-if="auth.hasRole('cliente')"><router-link to="/menu">Menú</router-link></li>
+        <li v-if="auth.hasRole('cliente')"><router-link to="/cart">
+          Carrito <span class="cart-count" v-if="cart.itemCount > 0">({{ cart.itemCount }})</span>
+        </router-link></li>
+        
+        <li v-if="auth.hasAnyRole(['admin', 'superadmin'])"><router-link to="/admin">Panel Admin</router-link></li>
+        <li v-if="auth.hasAnyRole(['admin', 'superadmin'])"><router-link to="/admin/users">Usuarios</router-link></li>
+        
+        <li v-if="auth.hasRole('caja')"><router-link to="/caja">Pagos</router-link></li>
+        <li v-if="auth.hasRole('cocina')"><router-link to="/cocina">Órdenes</router-link></li>
+        
+        <li class="user-menu">
+          <button @click="showUserMenu = !showUserMenu" class="user-btn">
+            {{ auth.user?.name }} ▼
+          </button>
+          <div v-if="showUserMenu" class="dropdown-menu">
+            <button @click="logout" class="logout-btn">Cerrar sesión</button>
+          </div>
+        </li>
       </ul>
     </nav>
+    
     <main class="main-content">
       <router-view />
     </main>
@@ -18,9 +35,28 @@
 </template>
 
 <script setup>
-import { useRouter, useRoute } from 'vue-router'
+import { useAuthStore } from './stores/auth'
+import { useCartStore } from './stores/cart'
+import { ref, onMounted, watch } from 'vue'
+import { useRouter } from 'vue-router'
+
+const auth = useAuthStore()
+const cart = useCartStore()
 const router = useRouter()
-const route = useRoute()
+const showUserMenu = ref(false)
+
+onMounted(() => {
+  auth.initFromStorage()
+})
+
+watch(() => router.currentRoute.value.name, () => {
+  showUserMenu.value = false
+})
+
+async function logout() {
+  await auth.logout()
+  router.push('/login')
+}
 </script>
 
 <style>
@@ -63,7 +99,7 @@ body {
 .nav-brand {
   display: flex;
   align-items: center;
-  gap: 1rem;
+  gap: 1.5rem;
 }
 
 .nav-brand h1 {
@@ -72,10 +108,21 @@ body {
   font-weight: 700;
 }
 
+.role-badge {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: #fff;
+  padding: 0.35rem 0.75rem;
+  border-radius: 20px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
 .nav-links {
   display: flex;
   list-style: none;
   gap: 1.5rem;
+  align-items: center;
 }
 
 .nav-links li {
@@ -102,10 +149,69 @@ body {
   border-bottom-color: #667eea;
 }
 
+.cart-count {
+  background: #e74c3c;
+  color: white;
+  padding: 0.1rem 0.4rem;
+  border-radius: 10px;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.user-menu {
+  position: relative;
+  margin-left: 1rem;
+}
+
+.user-btn {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border: none;
+  padding: 0.5rem 1rem;
+  border-radius: 5px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  font-weight: 600;
+  transition: opacity 0.3s ease;
+}
+
+.user-btn:hover {
+  opacity: 0.8;
+}
+
+.dropdown-menu {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  background: white;
+  border-radius: 5px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  margin-top: 0.5rem;
+  min-width: 150px;
+  z-index: 10;
+}
+
+.logout-btn {
+  width: 100%;
+  padding: 0.75rem 1rem;
+  background: none;
+  border: none;
+  text-align: left;
+  cursor: pointer;
+  color: #e74c3c;
+  font-weight: 600;
+  transition: background 0.3s ease;
+}
+
+.logout-btn:hover {
+  background: #f5f5f5;
+}
+
 .main-content {
   flex: 1;
-  padding: 0;
+  padding: 2rem;
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  overflow-y: auto;
 }
 
 @media (max-width: 768px) {
@@ -118,6 +224,7 @@ body {
     flex-wrap: wrap;
     gap: 1rem;
     justify-content: center;
+    width: 100%;
   }
 
   .nav-brand h1 {

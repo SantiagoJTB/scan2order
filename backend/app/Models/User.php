@@ -22,6 +22,9 @@ class User extends Authenticatable
         'email',
         'password',
         'phone',
+        'role_id',
+        'created_by',
+        'status',
     ];
 
     /**
@@ -43,6 +46,22 @@ class User extends Authenticatable
         'email_verified_at' => 'datetime',
         'password' => 'hashed',
     ];
+
+    /**
+     * The user's role.
+     */
+    public function role()
+    {
+        return $this->belongsTo(Role::class);
+    }
+
+    /**
+     * User who created this user.
+     */
+    public function creator()
+    {
+        return $this->belongsTo(User::class, 'created_by');
+    }
 
     /**
      * Restaurants the user belongs to (pivot stores role_id).
@@ -68,4 +87,38 @@ class User extends Authenticatable
     {
         return $this->hasMany(Order::class);
     }
+
+    /**
+     * Check if user has a specific role.
+     */
+    public function hasRole($roleName)
+    {
+        return $this->role()->where('name', $roleName)->exists();
+    }
+
+    /**
+     * Check if user has any of the given roles.
+     */
+    public function hasAnyRole($roles)
+    {
+        $roles = is_array($roles) ? $roles : func_get_args();
+        return $this->role()->whereIn('name', $roles)->exists();
+    }
+
+    /**
+     * Get permissions from role.
+     */
+    public function permissions()
+    {
+        return $this->role ? $this->role->permissions : collect();
+    }
+
+    /**
+     * Check if user has permission.
+     */
+    public function hasPermission($permissionName)
+    {
+        return $this->permissions()->where('name', $permissionName)->exists();
+    }
 }
+
