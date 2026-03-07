@@ -40,7 +40,7 @@
                 <button @click="changeStatus(group.admin)" class="btn-action" title="Cambiar estado">
                   🔄
                 </button>
-                <button @click="deleteUser(group.admin)" class="btn-delete" title="Eliminar usuario">
+                <button @click="openDeleteModal(group.admin)" class="btn-delete" title="Eliminar usuario">
                   🗑️
                 </button>
               </div>
@@ -70,7 +70,7 @@
                   <button @click="changeStatus(member)" class="btn-action-small" title="Cambiar estado">
                     🔄
                   </button>
-                  <button @click="deleteUser(member)" class="btn-delete-small" title="Eliminar usuario">
+                  <button @click="openDeleteModal(member)" class="btn-delete-small" title="Eliminar usuario">
                     🗑️
                   </button>
                 </div>
@@ -101,7 +101,7 @@
                 <button @click="changeStatus(client)" class="btn-action" title="Cambiar estado">
                   🔄
                 </button>
-                <button @click="deleteUser(client)" class="btn-delete" title="Eliminar usuario">
+                <button @click="openDeleteModal(client)" class="btn-delete" title="Eliminar usuario">
                   🗑️
                 </button>
               </div>
@@ -135,7 +135,7 @@
           </div>
           <div class="col-actions">
             <button @click="changeStatus(user)" class="btn-action">Cambiar estado</button>
-            <button @click="deleteUser(user)" class="btn-delete">Eliminar</button>
+            <button @click="openDeleteModal(user)" class="btn-delete">Eliminar</button>
           </div>
         </div>
       </div>
@@ -218,6 +218,29 @@
         </form>
       </div>
     </div>
+
+    <div v-if="showDeleteModal" class="modal-overlay">
+      <div class="modal modal-delete">
+        <div class="modal-header">
+          <h2>Confirmar eliminación</h2>
+          <button @click="cancelDelete" class="btn-close">×</button>
+        </div>
+
+        <div class="modal-body">
+          <p class="delete-message">¿Seguro que quieres eliminar este usuario?</p>
+          <p class="delete-user-name">{{ userToDelete?.name }} ({{ userToDelete?.email }})</p>
+
+          <div class="form-actions">
+            <button type="button" @click="cancelDelete" class="btn-cancel" :disabled="isDeleting">
+              Cancelar
+            </button>
+            <button type="button" @click="confirmDelete" class="btn-delete-confirm" :disabled="isDeleting">
+              {{ isDeleting ? 'Eliminando...' : 'Eliminar' }}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -232,6 +255,9 @@ const error = ref(null)
 const toast = ref({ show: false, type: 'success', message: '' })
 let toastTimer = null
 const showCreateForm = ref(false)
+const showDeleteModal = ref(false)
+const userToDelete = ref(null)
+const isDeleting = ref(false)
 const isCreating = ref(false)
 const createError = ref(null)
 const newUser = ref({
@@ -386,12 +412,23 @@ async function changeStatus(user) {
   }
 }
 
-async function deleteUser(user) {
-  const confirmed = window.confirm(`¿Eliminar al usuario ${user.name}?`)
-  if (!confirmed) return
+function openDeleteModal(user) {
+  userToDelete.value = user
+  showDeleteModal.value = true
+}
+
+function cancelDelete() {
+  showDeleteModal.value = false
+  userToDelete.value = null
+}
+
+async function confirmDelete() {
+  if (!userToDelete.value) return
+
+  isDeleting.value = true
 
   try {
-    const response = await fetch(`/api/users/${user.id}`, {
+    const response = await fetch(`/api/users/${userToDelete.value.id}`, {
       method: 'DELETE',
       headers: {
         'Authorization': `Bearer ${auth.token}`,
@@ -410,11 +447,14 @@ async function deleteUser(user) {
       throw new Error(data?.message || 'Error al eliminar usuario')
     }
 
+    cancelDelete()
     await fetchUsers()
     showToast('Usuario eliminado correctamente', 'success')
   } catch (err) {
     error.value = err.message
     showToast(err.message, 'error')
+  } finally {
+    isDeleting.value = false
   }
 }
 
@@ -609,6 +649,43 @@ onMounted(() => {
 
 .btn-delete:hover {
   opacity: 0.8;
+}
+
+.btn-delete-confirm {
+  flex: 1;
+  padding: 0.75rem;
+  background: #e74c3c;
+  color: white;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+  font-weight: 600;
+  transition: opacity 0.3s ease;
+}
+
+.btn-delete-confirm:hover:not(:disabled) {
+  opacity: 0.8;
+}
+
+.btn-delete-confirm:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.modal-delete {
+  max-width: 520px;
+}
+
+.delete-message {
+  margin: 0 0 0.75rem;
+  color: #2c3e50;
+  font-weight: 600;
+}
+
+.delete-user-name {
+  margin: 0 0 1rem;
+  color: #7f8c8d;
+  word-break: break-word;
 }
 
 /* Modal styles */
