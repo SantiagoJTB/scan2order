@@ -182,6 +182,38 @@ class UserController extends Controller
     }
 
     /**
+     * Delete user.
+     */
+    public function destroy(Request $request, User $user)
+    {
+        $currentUser = $request->user();
+
+        if (!$currentUser->hasAnyRole(['superadmin', 'admin'])) {
+            return response()->json(['message' => 'Unauthorized'], 403);
+        }
+
+        if ($currentUser->id === $user->id) {
+            return response()->json(['message' => 'You cannot delete your own account'], 422);
+        }
+
+        if ($currentUser->hasRole('admin') && !$currentUser->hasRole('superadmin')) {
+            if ($user->created_by !== $currentUser->id) {
+                return response()->json(['message' => 'Unauthorized'], 403);
+            }
+
+            if (!in_array($user->role?->name, ['caja', 'cocina'])) {
+                return response()->json(['message' => 'Admin can only delete caja and cocina users'], 403);
+            }
+        }
+
+        $user->delete();
+
+        return response()->json([
+            'message' => 'User deleted successfully'
+        ]);
+    }
+
+    /**
      * Format user response.
      */
     private function formatUser($user)

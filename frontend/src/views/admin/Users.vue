@@ -36,6 +36,9 @@
                 <button @click="changeStatus(group.admin)" class="btn-action" title="Cambiar estado">
                   🔄
                 </button>
+                <button @click="deleteUser(group.admin)" class="btn-delete" title="Eliminar usuario">
+                  🗑️
+                </button>
               </div>
             </div>
 
@@ -62,6 +65,9 @@
                 <div class="user-actions">
                   <button @click="changeStatus(member)" class="btn-action-small" title="Cambiar estado">
                     🔄
+                  </button>
+                  <button @click="deleteUser(member)" class="btn-delete-small" title="Eliminar usuario">
+                    🗑️
                   </button>
                 </div>
               </div>
@@ -90,6 +96,9 @@
               <div class="user-actions">
                 <button @click="changeStatus(client)" class="btn-action" title="Cambiar estado">
                   🔄
+                </button>
+                <button @click="deleteUser(client)" class="btn-delete" title="Eliminar usuario">
+                  🗑️
                 </button>
               </div>
             </div>
@@ -122,6 +131,7 @@
           </div>
           <div class="col-actions">
             <button @click="changeStatus(user)" class="btn-action">Cambiar estado</button>
+            <button @click="deleteUser(user)" class="btn-delete">Eliminar</button>
           </div>
         </div>
       </div>
@@ -350,6 +360,36 @@ async function changeStatus(user) {
   }
 }
 
+async function deleteUser(user) {
+  const confirmed = window.confirm(`¿Eliminar al usuario ${user.name}?`)
+  if (!confirmed) return
+
+  try {
+    const response = await fetch(`/api/users/${user.id}`, {
+      method: 'DELETE',
+      headers: {
+        'Authorization': `Bearer ${auth.token}`,
+        'Accept': 'application/json'
+      }
+    })
+
+    const contentType = response.headers.get('content-type') || ''
+    let data = null
+
+    if (contentType.includes('application/json')) {
+      data = await response.json()
+    }
+
+    if (!response.ok) {
+      throw new Error(data?.message || 'Error al eliminar usuario')
+    }
+
+    await fetchUsers()
+  } catch (err) {
+    error.value = err.message
+  }
+}
+
 onMounted(() => {
   fetchUsers()
 })
@@ -505,6 +545,21 @@ onMounted(() => {
 }
 
 .btn-action:hover {
+  opacity: 0.8;
+}
+
+.btn-delete {
+  padding: 0.5rem 1rem;
+  background: #e74c3c;
+  color: white;
+  border: none;
+  border-radius: 3px;
+  cursor: pointer;
+  font-size: 0.85rem;
+  transition: opacity 0.3s ease;
+}
+
+.btn-delete:hover {
   opacity: 0.8;
 }
 
@@ -733,6 +788,21 @@ onMounted(() => {
 }
 
 .btn-action-small:hover {
+  opacity: 0.8;
+}
+
+.btn-delete-small {
+  padding: 0.4rem 0.8rem;
+  background: #e74c3c;
+  color: white;
+  border: none;
+  border-radius: 3px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  transition: opacity 0.3s ease;
+}
+
+.btn-delete-small:hover {
   opacity: 0.8;
 }
 

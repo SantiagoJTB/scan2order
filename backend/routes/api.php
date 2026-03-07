@@ -44,6 +44,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/users', [UserController::class, 'index']);
     Route::get('/users/{user}', [UserController::class, 'show']);
     Route::patch('/users/{user}/status', [UserController::class, 'updateStatus']);
+    Route::delete('/users/{user}', [UserController::class, 'destroy']);
 });
 
 // Public API endpoints (for viewing menu, etc)
