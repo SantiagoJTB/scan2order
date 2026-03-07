@@ -30,6 +30,8 @@ class UserController extends Controller
             'password' => 'required|string|min:6',
             'phone' => 'nullable|string|max:20',
             'role' => 'required|string|in:admin,caja,cocina,cliente',
+            'assign_to_admin' => 'nullable|boolean',
+            'admin_id' => 'nullable|integer|exists:users,id',
         ]);
 
         // Get role by name
@@ -97,6 +99,27 @@ class UserController extends Controller
                 $createdUsers[] = $this->formatUser($cocinaUser);
             }
         } else {
+            $createdBy = $user->id;
+
+            if ($user->hasRole('superadmin') && in_array($data['role'], ['caja', 'cocina'])) {
+                $assignToAdmin = (bool) ($data['assign_to_admin'] ?? false);
+
+                if ($assignToAdmin) {
+                    if (empty($data['admin_id'])) {
+                        return response()->json(['message' => 'Debes seleccionar un admin'], 422);
+                    }
+
+                    $assignedAdmin = User::with('role')->find($data['admin_id']);
+                    if (!$assignedAdmin || $assignedAdmin->role?->name !== 'admin') {
+                        return response()->json(['message' => 'El usuario seleccionado no es admin'], 422);
+                    }
+
+                    $createdBy = $assignedAdmin->id;
+                } else {
+                    $createdBy = null;
+                }
+            }
+
             // Create caja or cocina single user
             $newUser = User::create([
                 'name' => $data['name'],
@@ -104,7 +127,7 @@ class UserController extends Controller
                 'password' => Hash::make($data['password']),
                 'phone' => $data['phone'] ?? null,
                 'role_id' => $role->id,
-                'created_by' => $user->id,
+                'created_by' => $createdBy,
                 'status' => 'active',
             ]);
             $createdUsers[] = $this->formatUser($newUser);
