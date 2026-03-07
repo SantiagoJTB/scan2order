@@ -1284,8 +1284,8 @@ onMounted(() => {
 .client-card .user-info {
   display: flex;
   align-items: center;
-  gap: 1rem;
-  margin-bottom: 1rem;
+  gap: 0.75rem;
+  margin-bottom: 0.6rem;
 }
 .user-avatar {
   width: 50px;
@@ -1299,9 +1299,10 @@ onMounted(() => {
 }
 
 .client-card .user-avatar {
-  width: 60px;
-  height: 60px;
-  font-size: 2rem;
+  width: 40px;
+  height: 40px;
+  font-size: 1.4rem;
+  flex-shrink: 0;
 }
 .user-avatar-small {
   width: 35px;
@@ -1329,11 +1330,11 @@ onMounted(() => {
 }
 
 .client-card .user-name {
-  font-size: 1.2rem;
-  margin-bottom: 0.5rem;
+  font-size: 0.95rem;
+  margin-bottom: 0.2rem;
 }
 .user-email {
-  font-size: 0.9rem;
+  font-size: 0.75rem;
   color: #7f8c8d;
 }
 
@@ -1357,9 +1358,9 @@ onMounted(() => {
 
 .client-card .user-meta {
   display: flex;
-  gap: 0.5rem;
+  gap: 0.4rem;
   flex-wrap: wrap;
-  margin-bottom: 1rem;
+  margin-bottom: 0.6rem;
 }
 .user-actions {
   display: flex;
@@ -1368,18 +1369,18 @@ onMounted(() => {
 
 .client-card .user-actions {
   display: flex;
-  gap: 0.75rem;
+  gap: 0.5rem;
   justify-content: flex-end;
   border-top: 1px solid #ecf0f1;
-  padding-top: 1rem;
+  padding-top: 0.6rem;
 }
 
 .client-card .btn-action,
 .client-card .btn-delete {
   flex: 1;
-  padding: 0.6rem 0.8rem;
-  font-size: 0.9rem;
-  border-radius: 6px;
+  padding: 0.4rem 0.6rem;
+  font-size: 0.85rem;
+  border-radius: 4px;
 }
 .btn-action-small {
   padding: 0.4rem 0.8rem;
@@ -1454,25 +1455,24 @@ onMounted(() => {
 
 .users-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
-  gap: 1rem;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 0.75rem;
 }
 
 .client-card {
   display: flex;
   flex-direction: column;
   background: white;
-  padding: 1.5rem;
-  border-radius: 12px;
-  border: 2px solid #e8eef3;
+  padding: 0.9rem;
+  border-radius: 8px;
+  border: 1px solid #e8eef3;
   transition: all 0.3s ease;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
 }
 
 .client-card:hover {
   border-color: #27ae60;
-  box-shadow: 0 8px 16px rgba(39, 174, 96, 0.15);
-  transform: translateY(-3px);
+  box-shadow: 0 4px 8px rgba(39, 174, 96, 0.12);
 }
 
 .empty-section {
@@ -1485,9 +1485,9 @@ onMounted(() => {
 }
 
 .user-phone {
-  font-size: 0.85rem;
+  font-size: 0.75rem;
   color: #7f8c8d;
-  margin-top: 0.25rem;
+  margin-top: 0.1rem;
 }
 
 @media (max-width: 768px) {
