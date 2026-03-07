@@ -2,7 +2,9 @@
   <div id="app" class="app-container">
     <nav v-if="auth.isAuthenticated" class="navbar">
       <div class="nav-brand">
-        <h1>Scan2Order</h1>
+        <router-link to="/" class="brand-link">
+          <h1>Scan2Order</h1>
+        </router-link>
         <span class="role-badge">{{ auth.userRole }}</span>
       </div>
       <ul class="nav-links">
@@ -111,6 +113,10 @@ body {
   color: #fff;
   font-size: 1.8rem;
   font-weight: 700;
+}
+
+.brand-link {
+  text-decoration: none;
 }
 
 .role-badge {

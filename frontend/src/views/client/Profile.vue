@@ -28,21 +28,61 @@
             <label>Teléfono:</label>
             <p class="info-value">{{ auth.user?.phone }}</p>
           </div>
+        </div>
 
-          <div class="info-group">
-            <label>Rol:</label>
-            <p class="info-value">
-              <span class="badge badge-cliente">{{ auth.user?.role?.name }}</span>
-            </p>
+        <div class="credit-card-section">
+          <h3>💳 Tarjeta de crédito</h3>
+
+          <div class="form-group">
+            <label for="card-holder">Nombre del titular:</label>
+            <input
+              id="card-holder"
+              v-model="cardForm.holder"
+              type="text"
+              placeholder="Como aparece en la tarjeta"
+            />
           </div>
 
-          <div class="info-group">
-            <label>Estado:</label>
-            <p class="info-value">
-              <span class="status-badge" :class="`status-${auth.user?.status}`">
-                {{ auth.user?.status }}
-              </span>
-            </p>
+          <div class="form-group">
+            <label for="card-number">Número de tarjeta:</label>
+            <input
+              id="card-number"
+              v-model="cardForm.number"
+              type="text"
+              inputmode="numeric"
+              maxlength="19"
+              placeholder="1234 5678 9012 3456"
+            />
+          </div>
+
+          <div class="card-row">
+            <div class="form-group">
+              <label for="card-expiry">Vencimiento:</label>
+              <input
+                id="card-expiry"
+                v-model="cardForm.expiry"
+                type="text"
+                maxlength="5"
+                placeholder="MM/AA"
+              />
+            </div>
+
+            <div class="form-group">
+              <label for="card-cvv">CVV:</label>
+              <input
+                id="card-cvv"
+                v-model="cardForm.cvv"
+                type="password"
+                maxlength="4"
+                placeholder="123"
+              />
+            </div>
+          </div>
+
+          <div class="card-actions">
+            <button @click="saveCard" class="btn-primary" type="button">
+              Guardar tarjeta
+            </button>
           </div>
         </div>
 
@@ -106,6 +146,12 @@ const isLoading = ref(false)
 const showDeleteModal = ref(false)
 const isDeleting = ref(false)
 const toast = ref({ show: false, type: 'success', message: '' })
+const cardForm = ref({
+  holder: '',
+  number: '',
+  expiry: '',
+  cvv: ''
+})
 let toastTimer = null
 
 function showToast(message, type = 'success') {
@@ -169,6 +215,15 @@ async function confirmDelete() {
 
 function goHome() {
   router.push('/')
+}
+
+function saveCard() {
+  if (!cardForm.value.holder || !cardForm.value.number || !cardForm.value.expiry || !cardForm.value.cvv) {
+    showToast('Completa los datos de la tarjeta', 'error')
+    return
+  }
+
+  showToast('Tarjeta guardada correctamente', 'success')
 }
 </script>
 
@@ -240,6 +295,54 @@ function goHome() {
   margin-bottom: 2rem;
 }
 
+.credit-card-section {
+  border-top: 1px solid #ecf0f1;
+  padding-top: 1.5rem;
+  margin-top: 0.5rem;
+}
+
+.credit-card-section h3 {
+  color: #2c3e50;
+  margin: 0 0 1rem;
+  font-size: 1.2rem;
+}
+
+.form-group {
+  margin-bottom: 1rem;
+}
+
+.form-group label {
+  display: block;
+  color: #7f8c8d;
+  font-size: 0.9rem;
+  font-weight: 600;
+  margin-bottom: 0.5rem;
+  text-transform: uppercase;
+}
+
+.form-group input {
+  width: 100%;
+  padding: 0.75rem;
+  border: 2px solid #ecf0f1;
+  border-radius: 8px;
+  font-size: 1rem;
+}
+
+.form-group input:focus {
+  outline: none;
+  border-color: #667eea;
+}
+
+.card-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+}
+
+.card-actions {
+  margin-top: 0.5rem;
+}
+
 .info-group {
   margin-bottom: 1.5rem;
   padding-bottom: 1rem;
@@ -264,39 +367,6 @@ function goHome() {
   font-size: 1.1rem;
   margin: 0;
   font-weight: 500;
-}
-
-.badge {
-  display: inline-block;
-  padding: 0.4rem 0.75rem;
-  border-radius: 20px;
-  font-size: 0.85rem;
-  font-weight: 600;
-  text-transform: uppercase;
-}
-
-.badge-cliente {
-  background: #27ae60;
-  color: white;
-}
-
-.status-badge {
-  display: inline-block;
-  padding: 0.4rem 0.75rem;
-  border-radius: 20px;
-  font-size: 0.85rem;
-  font-weight: 600;
-  text-transform: uppercase;
-}
-
-.status-active {
-  background: #d4edda;
-  color: #155724;
-}
-
-.status-inactive {
-  background: #f8d7da;
-  color: #721c24;
 }
 
 .profile-actions {
@@ -451,6 +521,10 @@ function goHome() {
 
   .profile-actions {
     flex-direction: column;
+  }
+
+  .card-row {
+    grid-template-columns: 1fr;
   }
 
   .btn-primary,
