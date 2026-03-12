@@ -46,6 +46,14 @@
                 >
                   ✏️
                 </button>
+                <button
+                  v-if="auth.hasRole('superadmin')"
+                  @click="openPasswordModal(group.admin)"
+                  class="btn-action"
+                  title="Cambiar contraseña"
+                >
+                  🔑
+                </button>
                 <button 
                   v-if="canChangeStatus(group.admin)"
                   @click="changeStatus(group.admin)" 
@@ -63,53 +71,61 @@
                   🗑️
                 </button>
               </div>
-            </div>
-
-            <!-- Caja y Cocina del admin -->
-            <div v-if="group.team && group.team.length > 0" class="team-members">
-              <div v-for="member in group.team" :key="member.id" class="team-card">
-                <div class="user-info">
-                  <div class="user-avatar-small">
-                    {{ member.role?.name === 'caja' ? '💰' : '👨‍🍳' }}
+              <div v-if="group.team && group.team.length > 0" class="admin-staff-inline">
+                <div class="team-members team-members--inside">
+                  <div v-for="member in group.team" :key="member.id" class="team-card">
+                    <div class="user-info">
+                      <div class="user-avatar-small">
+                        👨‍💼
+                      </div>
+                      <div class="user-details">
+                        <div class="user-name-small">{{ member.name }}</div>
+                        <div class="user-email-small">{{ member.email }}</div>
+                      </div>
+                    </div>
+                    <div class="user-meta">
+                      <span class="badge" :class="`badge-${member.role?.name}`">
+                        {{ member.role?.name }}
+                      </span>
+                      <span class="status-badge" :class="`status-${member.status}`">
+                        {{ member.status }}
+                      </span>
+                    </div>
+                    <div class="user-actions">
+                      <button
+                        v-if="canEditUser(member)"
+                        @click="openEditModal(member)"
+                        class="btn-edit-small"
+                        title="Editar usuario"
+                      >
+                        ✏️
+                      </button>
+                      <button
+                        v-if="auth.hasRole('superadmin')"
+                        @click="openPasswordModal(member)"
+                        class="btn-action-small"
+                        title="Cambiar contraseña"
+                      >
+                        🔑
+                      </button>
+                      <button 
+                        v-if="canChangeStatus(member)"
+                        @click="changeStatus(member)" 
+                        class="btn-action-small" 
+                        title="Cambiar estado"
+                      >
+                        🔄
+                      </button>
+                      <button 
+                        v-if="canDeleteUser(member)"
+                        @click="openDeleteModal(member)" 
+                        class="btn-delete-small" 
+                        title="Eliminar usuario"
+                      >
+                        🗑️
+                      </button>
+                    </div>
                   </div>
-                  <div class="user-details">
-                    <div class="user-name-small">{{ member.name }}</div>
-                    <div class="user-email-small">{{ member.email }}</div>
-                  </div>
-                </div>
-                <div class="user-meta">
-                  <span class="badge" :class="`badge-${member.role?.name}`">
-                    {{ member.role?.name }}
-                  </span>
-                  <span class="status-badge" :class="`status-${member.status}`">
-                    {{ member.status }}
-                  </span>
-                </div>
-                <div class="user-actions">
-                  <button
-                    v-if="canEditUser(member)"
-                    @click="openEditModal(member)"
-                    class="btn-edit-small"
-                    title="Editar usuario"
-                  >
-                    ✏️
-                  </button>
-                  <button 
-                    v-if="canChangeStatus(member)"
-                    @click="changeStatus(member)" 
-                    class="btn-action-small" 
-                    title="Cambiar estado"
-                  >
-                    🔄
-                  </button>
-                  <button 
-                    v-if="canDeleteUser(member)"
-                    @click="openDeleteModal(member)" 
-                    class="btn-delete-small" 
-                    title="Eliminar usuario"
-                  >
-                    🗑️
-                  </button>
                 </div>
               </div>
             </div>
@@ -117,13 +133,13 @@
         </div>
 
         <div v-if="orphanStaffUsers.length > 0" class="section">
-          <h2 class="section-title">⚠️ Usuarios huérfanos (Caja/Cocina)</h2>
+          <h2 class="section-title">⚠️ Usuarios huérfanos (Staff)</h2>
 
           <div class="team-members orphan-members">
             <div v-for="member in orphanStaffUsers" :key="member.id" class="team-card">
               <div class="user-info">
                 <div class="user-avatar-small">
-                  {{ member.role?.name === 'caja' ? '💰' : '👨‍🍳' }}
+                  👨‍💼
                 </div>
                 <div class="user-details">
                   <div class="user-name-small">{{ member.name }}</div>
@@ -146,6 +162,14 @@
                   title="Editar usuario"
                 >
                   ✏️
+                </button>
+                <button
+                  v-if="auth.hasRole('superadmin')"
+                  @click="openPasswordModal(member)"
+                  class="btn-action-small"
+                  title="Cambiar contraseña"
+                >
+                  🔑
                 </button>
                 <button
                   v-if="canChangeStatus(member)"
@@ -196,6 +220,14 @@
                   title="Editar usuario"
                 >
                   ✏️
+                </button>
+                <button
+                  v-if="auth.hasRole('superadmin')"
+                  @click="openPasswordModal(client)"
+                  class="btn-action"
+                  title="Cambiar contraseña"
+                >
+                  🔑
                 </button>
                 <button 
                   v-if="canChangeStatus(client)"
@@ -319,6 +351,18 @@
             />
           </div>
 
+          <div v-if="newUser.role === 'admin'" class="form-group">
+            <label for="staff-password">Contraseña del Staff (auto-generado):</label>
+            <input
+              v-model="newUser.staffPassword"
+              type="password"
+              id="staff-password"
+              placeholder="••••••••"
+              required
+            />
+            <p class="field-help">Se creará automáticamente una cuenta staff asociada a este admin</p>
+          </div>
+
           <div class="form-group">
             <label for="phone">Teléfono:</label>
             <input
@@ -334,8 +378,7 @@
             <select v-model="newUser.role" id="role" required @change="handleNewUserRoleChange">
               <option value="">Seleccionar rol</option>
               <option v-if="auth.hasRole('superadmin')" value="admin">Admin</option>
-              <option value="caja">Caja</option>
-              <option value="cocina">Cocina</option>
+              <option value="staff">Staff</option>
               <option v-if="auth.hasRole('superadmin')" value="cliente">Cliente</option>
             </select>
           </div>
@@ -463,6 +506,57 @@
       </div>
     </div>
 
+    <!-- Change password modal -->
+    <div v-if="showPasswordModal" class="modal-overlay">
+      <div class="modal">
+        <div class="modal-header">
+          <h2>Cambiar contraseña</h2>
+          <button @click="cancelPasswordChange" class="btn-close">×</button>
+        </div>
+
+        <form @submit.prevent="confirmPasswordChange" class="modal-body">
+          <p class="password-user-info">
+            Usuario: <strong>{{ userToChangePassword?.name }}</strong> ({{ userToChangePassword?.email }})
+          </p>
+
+          <div class="form-group">
+            <label for="new-password">Nueva contraseña:</label>
+            <input
+              v-model="passwordData.password"
+              type="password"
+              id="new-password"
+              placeholder="••••••••"
+              required
+              minlength="6"
+            />
+          </div>
+
+          <div class="form-group">
+            <label for="confirm-password">Confirmar contraseña:</label>
+            <input
+              v-model="passwordData.password_confirmation"
+              type="password"
+              id="confirm-password"
+              placeholder="••••••••"
+              required
+              minlength="6"
+            />
+          </div>
+
+          <div v-if="passwordError" class="error">{{ passwordError }}</div>
+
+          <div class="form-actions">
+            <button type="button" @click="cancelPasswordChange" class="btn-cancel" :disabled="isChangingPassword">
+              Cancelar
+            </button>
+            <button type="submit" class="btn-save" :disabled="isChangingPassword">
+              {{ isChangingPassword ? 'Cambiando...' : 'Cambiar contraseña' }}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+
   </div>
 </template>
 
@@ -479,14 +573,22 @@ let toastTimer = null
 const showCreateForm = ref(false)
 const showEditModal = ref(false)
 const showDeleteModal = ref(false)
+const showPasswordModal = ref(false)
 const userToEdit = ref(null)
 const userToDelete = ref(null)
+const userToChangePassword = ref(null)
 const deleteConfirmed = ref(false)
 const isDeleting = ref(false)
 const isCreating = ref(false)
 const isUpdating = ref(false)
+const isChangingPassword = ref(false)
 const createError = ref(null)
 const editError = ref(null)
+const passwordError = ref(null)
+const passwordData = ref({
+  password: '',
+  password_confirmation: ''
+})
 const editUser = ref({
   name: '',
   email: '',
@@ -496,22 +598,23 @@ const newUser = ref({
   name: '',
   email: '',
   password: '',
+  staffPassword: '',
   phone: '',
   role: '',
   assignToAdmin: true,
   adminId: ''
 })
 
-// Grupos de administradores con sus equipos (caja y cocina)
+// Grupos de administradores con sus equipos (staff)
 const adminGroups = computed(() => {
   if (!auth.hasRole('superadmin')) return []
   
   const admins = users.value.filter(u => u.role?.name === 'admin')
   return admins.map(admin => {
-    // Buscar usuarios creados por este admin (caja y cocina)
+    // Buscar usuarios staff creados por este admin
     const team = users.value.filter(u => 
       u.created_by === admin.id && 
-      (u.role?.name === 'caja' || u.role?.name === 'cocina')
+      u.role?.name === 'staff'
     )
     return { admin, team }
   })
@@ -527,7 +630,7 @@ const orphanStaffUsers = computed(() => {
   )
 
   return users.value.filter(u => {
-    const isStaff = u.role?.name === 'caja' || u.role?.name === 'cocina'
+    const isStaff = u.role?.name === 'staff'
     if (!isStaff) return false
 
     const createdBy = u.created_by
@@ -547,7 +650,7 @@ const adminOptions = computed(() => {
 })
 
 const showAssignAdminOption = computed(() => {
-  return auth.hasRole('superadmin') && ['caja', 'cocina'].includes(newUser.value.role)
+  return auth.hasRole('superadmin') && newUser.value.role === 'staff'
 })
 
 const canManageUsers = computed(() => auth.hasAnyRole(['superadmin', 'admin']))
@@ -557,6 +660,12 @@ function canDeleteUser(user) {
   if (user.id === auth.user?.id) {
     return false
   }
+  
+  // Admin no puede eliminar clientes (solo superadmin puede)
+  if (auth.hasRole('admin') && !auth.hasRole('superadmin') && user.role?.name === 'cliente') {
+    return false
+  }
+  
   return true
 }
 
@@ -647,6 +756,11 @@ async function createUser() {
       role: newUser.value.role
     }
 
+    // Include staff password when creating admin
+    if (newUser.value.role === 'admin' && newUser.value.staffPassword) {
+      payload.staff_password = newUser.value.staffPassword
+    }
+
     if (showAssignAdminOption.value) {
       payload.assign_to_admin = newUser.value.assignToAdmin
       payload.admin_id = newUser.value.assignToAdmin ? Number(newUser.value.adminId) : null
@@ -686,7 +800,7 @@ async function createUser() {
 
     // Close modal and reset form
     showCreateForm.value = false
-    newUser.value = { name: '', email: '', password: '', phone: '', role: '', assignToAdmin: true, adminId: '' }
+    newUser.value = { name: '', email: '', password: '', staffPassword: '', phone: '', role: '', assignToAdmin: true, adminId: '' }
     
     // Refresh users list
     await fetchUsers()
@@ -700,7 +814,7 @@ async function createUser() {
 }
 
 function handleNewUserRoleChange() {
-  if (!['caja', 'cocina'].includes(newUser.value.role)) {
+  if (newUser.value.role !== 'staff') {
     newUser.value.assignToAdmin = true
     newUser.value.adminId = ''
   }
@@ -862,6 +976,76 @@ async function confirmDelete() {
   }
 }
 
+function openPasswordModal(user) {
+  userToChangePassword.value = user
+  passwordData.value = { password: '', password_confirmation: '' }
+  passwordError.value = null
+  showPasswordModal.value = true
+}
+
+function cancelPasswordChange() {
+  showPasswordModal.value = false
+  userToChangePassword.value = null
+  passwordData.value = { password: '', password_confirmation: '' }
+  passwordError.value = null
+}
+
+async function confirmPasswordChange() {
+  if (!auth.hasRole('superadmin')) {
+    showToast('No autorizado para cambiar contraseñas', 'error')
+    return
+  }
+
+  if (!userToChangePassword.value) return
+
+  if (passwordData.value.password !== passwordData.value.password_confirmation) {
+    passwordError.value = 'Las contraseñas no coinciden'
+    return
+  }
+
+  if (passwordData.value.password.length < 6) {
+    passwordError.value = 'La contraseña debe tener al menos 6 caracteres'
+    return
+  }
+
+  isChangingPassword.value = true
+  passwordError.value = null
+
+  try {
+    const response = await fetch(`/api/users/${userToChangePassword.value.id}/password`, {
+      method: 'PATCH',
+      headers: {
+        'Authorization': `Bearer ${auth.token}`,
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'
+      },
+      body: JSON.stringify({
+        password: passwordData.value.password,
+        password_confirmation: passwordData.value.password_confirmation
+      })
+    })
+
+    const contentType = response.headers.get('content-type') || ''
+    let data = null
+
+    if (contentType.includes('application/json')) {
+      data = await response.json()
+    }
+
+    if (!response.ok) {
+      throw new Error(data?.message || 'Error al cambiar contraseña')
+    }
+
+    cancelPasswordChange()
+    showToast('Contraseña actualizada correctamente', 'success')
+  } catch (err) {
+    passwordError.value = err.message
+    showToast(err.message, 'error')
+  } finally {
+    isChangingPassword.value = false
+  }
+}
+
 onMounted(() => {
   fetchUsers()
 })
@@ -991,13 +1175,8 @@ onMounted(() => {
   color: white;
 }
 
-.badge-caja {
+.badge-staff {
   background: #f39c12;
-  color: white;
-}
-
-.badge-cocina {
-  background: #e74c3c;
   color: white;
 }
 
@@ -1111,6 +1290,22 @@ onMounted(() => {
 .delete-confirm-check input {
   width: 16px;
   height: 16px;
+}
+
+.password-user-info {
+  margin: 0 0 1.5rem;
+  padding: 0.75rem;
+  background: #f8f9fa;
+  border-left: 3px solid #667eea;
+  border-radius: 4px;
+  color: #2c3e50;
+}
+
+.field-help {
+  margin: 0.5rem 0 0;
+  font-size: 0.85rem;
+  color: #7f8c8d;
+  font-style: italic;
 }
 
 /* Modal styles */
@@ -1443,6 +1638,17 @@ onMounted(() => {
   padding-left: 2rem;
   border-left: 3px solid #667eea;
   margin-left: 1rem;
+}
+
+.admin-staff-inline {
+  grid-column: 1 / -1;
+  margin-top: 0.75rem;
+}
+
+.team-members--inside {
+  padding-left: 0;
+  border-left: none;
+  margin-left: 0;
 }
 
 .orphan-members {

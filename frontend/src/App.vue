@@ -1,30 +1,29 @@
 <template>
   <div id="app" class="app-container">
-    <nav v-if="auth.isAuthenticated" class="navbar">
+    <nav v-if="auth.isAuthenticated" :class="['navbar', { 'navbar--restaurant-focus': isRestaurantFocusView }]">
       <div class="nav-brand">
-        <router-link to="/" class="brand-link">
+        <router-link v-if="!isRestaurantFocusView" to="/" class="brand-link">
           <h1>Scan2Order</h1>
         </router-link>
+        <span v-else class="brand-secondary">Experiencia del restaurante</span>
         <span class="role-badge">{{ auth.userRole }}</span>
       </div>
       <ul class="nav-links">
-        <li v-if="isCliente"><router-link to="/menu">Menú</router-link></li>
+        <li v-if="isCliente"><router-link to="/restaurants">Restaurantes</router-link></li>
         <li v-if="isCliente"><router-link to="/cart">
           Carrito <span class="cart-count" v-if="cart.itemCount > 0">({{ cart.itemCount }})</span>
         </router-link></li>
+        <li v-if="isCliente"><router-link to="/orders">Mis Pedidos</router-link></li>
+        <li v-if="isStaff"><router-link :to="staffDashboardRoute">Panel Staff</router-link></li>
         
         <li v-if="canAccessAdmin"><router-link to="/admin">Panel Admin</router-link></li>
-        <li v-if="canAccessAdmin"><router-link to="/admin/users">Usuarios</router-link></li>
-        
-        <li v-if="isCaja"><router-link to="/caja">Pagos</router-link></li>
-        <li v-if="isCocina"><router-link to="/cocina">Órdenes</router-link></li>
         
         <li class="user-menu">
           <button @click="showUserMenu = !showUserMenu" class="user-btn">
             {{ auth.user?.name }} ▼
           </button>
           <div v-if="showUserMenu" class="dropdown-menu">
-            <router-link v-if="isCliente" to="/profile" class="dropdown-item">Mi perfil</router-link>
+            <router-link v-if="isCliente" to="/profile" class="dropdown-item">Ver perfil</router-link>
             <button @click="logout" class="logout-btn">Cerrar sesión</button>
           </div>
         </li>
@@ -41,19 +40,24 @@
 import { useAuthStore } from './stores/auth'
 import { useCartStore } from './stores/cart'
 import { ref, onMounted, watch, computed } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRouter, useRoute } from 'vue-router'
 
 const auth = useAuthStore()
 const cart = useCartStore()
 const router = useRouter()
+const route = useRoute()
 const showUserMenu = ref(false)
 const canAccessAdmin = computed(() => auth.hasAnyRole(['admin', 'superadmin']))
 const isCliente = computed(() => auth.hasRole('cliente'))
-const isCaja = computed(() => auth.hasRole('caja'))
-const isCocina = computed(() => auth.hasRole('cocina'))
+const isStaff = computed(() => auth.hasRole('staff'))
+const staffDashboardRoute = computed(() => {
+  if (auth.staffRestaurantId) return `/staff/${auth.staffRestaurantId}`
+  return '/staff'
+})
+const isRestaurantFocusView = computed(() => route.name === 'RestaurantMenu')
 
-onMounted(() => {
-  auth.initFromStorage()
+onMounted(async () => {
+  await auth.initFromStorage()
 })
 
 watch(() => router.currentRoute.value.name, () => {
@@ -103,6 +107,11 @@ body {
   flex-shrink: 0;
 }
 
+.navbar--restaurant-focus {
+  background-color: rgba(44, 62, 80, 0.92);
+  padding: 0.9rem 1.25rem;
+}
+
 .nav-brand {
   display: flex;
   align-items: center;
@@ -113,6 +122,13 @@ body {
   color: #fff;
   font-size: 1.8rem;
   font-weight: 700;
+}
+
+.brand-secondary {
+  color: #d4dce4;
+  font-size: 0.9rem;
+  font-weight: 600;
+  letter-spacing: 0.2px;
 }
 
 .brand-link {
@@ -194,12 +210,14 @@ body {
   position: absolute;
   top: 100%;
   right: 0;
-  background: white;
-  border-radius: 5px;
+  background: rgba(44, 62, 80, 0.92);
+  border-radius: 10px;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
   margin-top: 0.5rem;
-  min-width: 150px;
-  z-index: 10;
+  min-width: 180px;
+  z-index: 9999;
+  overflow: hidden;
+  border: 1px solid #d4dce4;
 }
 
 .logout-btn {
@@ -207,7 +225,10 @@ body {
   padding: 0.75rem 1rem;
   background: none;
   border: none;
-  text-align: left;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
   cursor: pointer;
   color: #e74c3c;
   font-weight: 600;
@@ -224,16 +245,24 @@ body {
   padding: 0.75rem 1rem;
   background: none;
   border: none;
-  text-align: left;
+  text-align: center;
   cursor: pointer;
-  color: #2c3e50;
+  color: #667eea;
   text-decoration: none;
   font-weight: 600;
+  border-bottom: none;
   transition: background 0.3s ease;
 }
 
 .dropdown-item:hover {
-  background: #f5f5f5;
+  background: #ffffff;
+  color: #764ba2;
+  border-bottom: none;
+}
+
+.dropdown-item.router-link-active {
+  color: #667eea;
+  border-bottom: none;
 }
 
 .dropdown-item:first-child {

@@ -1,19 +1,39 @@
 <template>
   <div v-if="canAccessAdmin" class="admin-container">
     <div class="header">
-      <h1>Dashboard Admin</h1>
-      <p>Bienvenido al panel de administración</p>
+      <h1 v-if="isSuperAdmin">Dashboard Superadmin</h1>
+      <h1 v-else>Dashboard Admin</h1>
+      <p v-if="isSuperAdmin">Gestión global del sistema</p>
+      <p v-else>Gestión de tu restaurante</p>
     </div>
 
-    <div class="dashboard-grid">
+    <div v-if="isSuperAdmin" class="dashboard-grid">
       <div class="stat-card">
         <div class="stat-icon">👥</div>
         <div class="stat-info">
-          <p class="stat-label">Usuarios</p>
+          <p class="stat-label">Usuarios totales (clientes)</p>
           <p class="stat-value">{{ stats.users }}</p>
         </div>
       </div>
 
+      <div class="stat-card">
+        <div class="stat-icon">🍽️</div>
+        <div class="stat-info">
+          <p class="stat-label">Restaurantes</p>
+          <p class="stat-value">{{ stats.restaurants }}</p>
+        </div>
+      </div>
+
+      <div class="stat-card">
+        <div class="stat-icon">👨‍💼</div>
+        <div class="stat-info">
+          <p class="stat-label">Administradores (staffs)</p>
+          <p class="stat-value">{{ stats.admins }}</p>
+        </div>
+      </div>
+    </div>
+
+    <div v-else class="dashboard-grid">
       <div class="stat-card">
         <div class="stat-icon">🍽️</div>
         <div class="stat-info">
@@ -40,23 +60,28 @@
     </div>
 
     <div class="actions-section">
-      <h2>Acciones rápidas</h2>
+      <h2 v-if="isSuperAdmin">Gestión del sistema</h2>
+      <h2 v-else>Acciones rápidas</h2>
       <div class="action-buttons">
-        <router-link to="/admin/users" class="action-btn">
+        <router-link v-if="isSuperAdmin" to="/admin/users" class="action-btn primary">
           <span class="btn-icon">👥</span>
           Gestionar usuarios
         </router-link>
         <router-link to="/admin/restaurants" class="action-btn">
           <span class="btn-icon">🍽️</span>
-          Gestionar restaurantes
+          Gestionar locales
         </router-link>
-        <router-link to="/admin/products" class="action-btn">
+        <router-link v-if="!isSuperAdmin" to="/admin/users" class="action-btn">
+          <span class="btn-icon">👨‍💼</span>
+          Gestionar staffs
+        </router-link>
+        <router-link v-if="canManageProducts" to="/admin/products" class="action-btn">
           <span class="btn-icon">📦</span>
           Gestionar productos
         </router-link>
-        <router-link to="/admin/orders" class="action-btn">
-          <span class="btn-icon">📋</span>
-          Ver órdenes
+        <router-link to="/admin/reports" class="action-btn">
+          <span class="btn-icon">📊</span>
+          Informes
         </router-link>
       </div>
     </div>
@@ -78,21 +103,81 @@ import { useAuthStore } from '../../stores/auth'
 
 const auth = useAuthStore()
 const canAccessAdmin = computed(() => auth.hasAnyRole(['admin', 'superadmin']))
+const isSuperAdmin = computed(() => auth.hasRole('superadmin'))
+const canManageProducts = computed(() => auth.hasAnyRole(['admin', 'superadmin']))
 const stats = ref({
   users: 0,
+  admins: 0,
   restaurants: 0,
   products: 0,
   orders: 0
 })
 
-onMounted(() => {
-  if (!canAccessAdmin.value) return
+function countByRole(users, roleName) {
+  if (!Array.isArray(users)) return 0
+  return users.filter((item) => item?.role?.name === roleName).length
+}
+
+async function fetchDashboardStats() {
+  const headers = {
+    Accept: 'application/json',
+    ...(auth.token ? { Authorization: `Bearer ${auth.token}` } : {})
+  }
+
+  const [restaurantsResponse, usersResponse, restaurantsStatsResponse, ordersResponse] = await Promise.all([
+    fetch('/api/restaurants', { headers }),
+    fetch('/api/users', { headers }),
+    fetch('/api/restaurants/stats', { headers }),
+    fetch('/api/orders', { headers })
+  ])
+
+  const restaurantsData = restaurantsResponse.ok ? await restaurantsResponse.json() : []
+  const usersData = usersResponse.ok ? await usersResponse.json() : []
+  const restaurantsStatsData = restaurantsStatsResponse.ok ? await restaurantsStatsResponse.json() : []
+  const ordersData = ordersResponse.ok ? await ordersResponse.json() : []
+
+  const restaurants = Array.isArray(restaurantsData) ? restaurantsData : []
+  const users = Array.isArray(usersData) ? usersData : []
+  const restaurantsStats = Array.isArray(restaurantsStatsData) ? restaurantsStatsData : []
+  const orders = Array.isArray(ordersData) ? ordersData : []
+
+  const productsCount = restaurantsStats.reduce((sum, restaurant) => {
+    return sum + Number(restaurant?.total_products || 0)
+  }, 0)
+
+  const ordersCount = orders.length
+
+  if (isSuperAdmin.value) {
+    stats.value = {
+      users: countByRole(users, 'cliente'),
+      admins: countByRole(users, 'staff'),
+      restaurants: restaurants.length,
+      products: productsCount,
+      orders: ordersCount
+    }
+    return
+  }
 
   stats.value = {
-    users: 12,
-    restaurants: 5,
-    products: 48,
-    orders: 156
+    users: 0,
+    admins: 0,
+    restaurants: restaurants.length,
+    products: productsCount,
+    orders: ordersCount
+  }
+}
+
+onMounted(async () => {
+  if (!auth.initialized) {
+    await auth.initFromStorage()
+  }
+
+  if (!canAccessAdmin.value) return
+
+  try {
+    await fetchDashboardStats()
+  } catch (err) {
+    console.error('No se pudieron cargar estadísticas del dashboard:', err)
   }
 })
 </script>
@@ -210,6 +295,16 @@ onMounted(() => {
 .action-btn:hover {
   transform: translateY(-3px);
   opacity: 0.9;
+}
+
+.action-btn.primary {
+  background: linear-gradient(135deg, #9b59b6 0%, #8e44ad 100%);
+  border: 2px solid #8e44ad;
+  box-shadow: 0 4px 12px rgba(155, 89, 182, 0.3);
+}
+
+.action-btn.primary:hover {
+  box-shadow: 0 6px 16px rgba(155, 89, 182, 0.4);
 }
 
 .btn-icon {

@@ -4,19 +4,63 @@ import { ref, computed } from 'vue'
 export const useAuthStore = defineStore('auth', () => {
   const user = ref(null)
   const token = ref(localStorage.getItem('token') || null)
+  const initialized = ref(false)
   const isLoading = ref(false)
   const error = ref(null)
 
   const isAuthenticated = computed(() => !!token.value && !!user.value)
-  const userRole = computed(() => user.value?.role?.name || null)
+  const userRole = computed(() => {
+    const rawRole = user.value?.role?.name ?? user.value?.role ?? user.value?.role_name ?? null
+    return typeof rawRole === 'string' ? rawRole.trim().toLowerCase() : null
+  })
+
+  // For staff users, get the linked restaurant ID
+  const staffRestaurantId = computed(() => {
+    if (userRole.value === 'staff' && user.value?.restaurant_id) {
+      return user.value.restaurant_id
+    }
+    return null
+  })
 
   const hasRole = (role) => {
-    return userRole.value === role
+    if (typeof role !== 'string') return false
+    return userRole.value === role.trim().toLowerCase()
   }
 
   const hasAnyRole = (roles) => {
-    return roles.includes(userRole.value)
+    if (!Array.isArray(roles)) return false
+    const normalized = roles
+      .filter((role) => typeof role === 'string')
+      .map((role) => role.trim().toLowerCase())
+    return normalized.includes(userRole.value)
   }
+
+    async function fetchCurrentUser() {
+      if (!token.value) return false
+    
+      try {
+        const response = await fetch('/api/me', {
+          headers: {
+            'Authorization': `Bearer ${token.value}`,
+            'Accept': 'application/json'
+          }
+        })
+      
+        if (!response.ok) {
+          logout()
+          return false
+        }
+      
+        const data = await response.json()
+        user.value = data
+        localStorage.setItem('user', JSON.stringify(data))
+        return true
+      } catch (err) {
+        console.error('Error fetching current user:', err)
+        logout()
+        return false
+      }
+    }
 
   async function login(email, password) {
     isLoading.value = true
@@ -100,22 +144,39 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
 
-  function initFromStorage() {
-    const storedUser = localStorage.getItem('user')
+    async function initFromStorage() {
+      const storedUser = localStorage.getItem('user')
     const storedToken = localStorage.getItem('token')
-    if (storedUser) user.value = JSON.parse(storedUser)
+      if (storedUser) {
+        try {
+          user.value = JSON.parse(storedUser)
+        } catch {
+          user.value = null
+          localStorage.removeItem('user')
+        }
+      }
     if (storedToken) token.value = storedToken
+    
+      // Fetch fresh user data if token exists
+      if (token.value) {
+        await fetchCurrentUser()
+      }
+
+      initialized.value = true
   }
 
   return {
     user,
     token,
+    initialized,
     isLoading,
     error,
     isAuthenticated,
     userRole,
+    staffRestaurantId,
     hasRole,
     hasAnyRole,
+      fetchCurrentUser,
     login,
     register,
     logout,

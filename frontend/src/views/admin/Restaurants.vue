@@ -38,6 +38,17 @@
               </div>
               <span v-else>Sin admins vinculados</span>
             </div>
+            <div class="restaurant-admins restaurant-staffs">
+              <strong>Staff:</strong>
+              <div v-if="Array.isArray(restaurant.staffs) && restaurant.staffs.length" class="admin-lines">
+                <div v-for="staff in restaurant.staffs" :key="staff.id" class="admin-line">
+                  {{ staff.name }}
+                  <span v-if="staff.phone"> · {{ staff.phone }}</span>
+                  <span v-if="staff.email"> · {{ staff.email }}</span>
+                </div>
+              </div>
+              <span v-else>Sin staff asignado</span>
+            </div>
           </div>
           <div class="restaurant-meta">
             <span class="status-badge" :class="restaurant.active ? 'status-active' : 'status-inactive'">
@@ -45,11 +56,27 @@
             </span>
           </div>
           <div class="restaurant-actions">
-            <button class="btn-action" @click="openEditModal(restaurant)" title="Editar restaurante">✏️</button>
-            <button class="btn-action" @click="openMenuEditor(restaurant)" title="Editar carta/menu">📋</button>
-            <button class="btn-action" @click="toggleStatus(restaurant)" title="Cambiar estado">🔄</button>
-            <button class="btn-delete" @click="openDeleteModal(restaurant)" title="Eliminar restaurante">🗑️</button>
+            <button class="btn-action btn-main-ops" @click="openOperations(restaurant, $event)" title="Ver caja + cocina (Ctrl/Cmd + click: nueva pestaña)">💼 Caja + Cocina</button>
+            <button class="btn-action btn-main-ops" @click="openCaja(restaurant, $event)" title="Ver caja (Ctrl/Cmd + click: nueva pestaña)">🧾 Caja</button>
+            <button class="btn-action btn-main-ops" @click="openCocina(restaurant, $event)" title="Ver cocina (Ctrl/Cmd + click: nueva pestaña)">👨‍🍳 Cocina</button>
           </div>
+          <details class="operations-menu">
+            <summary>Más opciones</summary>
+            <div class="operations-links">
+              <button type="button" class="btn-op" @click="openEditModal(restaurant)">Editar datos</button>
+              <button
+                v-if="!hasAdmins(restaurant)"
+                type="button"
+                class="btn-op"
+                @click="openEditModal(restaurant)"
+              >
+                Añadir admin
+              </button>
+              <button type="button" class="btn-op" @click="openEditModal(restaurant)">Asignar staff</button>
+              <button type="button" class="btn-op" @click="toggleStatus(restaurant)">Cambiar estado</button>
+              <button type="button" class="btn-op" @click="openDeleteModal(restaurant)">Borrar</button>
+            </div>
+          </details>
         </div>
       </div>
     </div>
@@ -85,18 +112,51 @@
           </div>
 
           <div class="form-group">
-            <label>Admins vinculados:</label>
+            <label>Admin vinculado:</label>
             <div v-if="isLoadingAdmins" class="admins-loading">Cargando admins...</div>
             <div v-else-if="adminOptions.length === 0" class="admins-empty">No hay admins disponibles</div>
             <div v-else class="admins-list">
               <label v-for="admin in adminOptions" :key="admin.id" class="admin-item">
                 <input
-                  v-model="form.adminIds"
-                  type="checkbox"
+                  v-model="form.adminId"
+                  type="radio"
                   :value="admin.id"
                   :disabled="isOnlyOwnAdminSelectable && admin.id !== auth.user?.id"
                 />
                 <span>{{ admin.name }} ({{ admin.email }})</span>
+              </label>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label>Staff asignado:</label>
+            <div v-if="isLoadingStaffs" class="admins-loading">Cargando staffs...</div>
+            <div v-else-if="staffOptions.length === 0" class="admins-empty">No hay staffs disponibles</div>
+            <div v-else class="admins-list">
+              <label
+                v-for="staff in staffOptionsWithAssignment"
+                :key="staff.id"
+                class="admin-item"
+                :class="{ 'admin-item-disabled': staff.disabled }"
+              >
+                <input
+                  v-model="form.staffIds"
+                  type="checkbox"
+                  :value="staff.id"
+                  :disabled="staff.disabled"
+                />
+                <span>
+                  {{ staff.name }} ({{ staff.email }})
+                  <span v-if="staff.disabledReason" class="staff-assigned-info">
+                    · {{ staff.disabledReason }}
+                  </span>
+                  <span v-if="staff.assignedRestaurantName" class="staff-assigned-info">
+                    · Asignado a: {{ staff.assignedRestaurantName }}
+                  </span>
+                  <span v-else class="staff-available-info">
+                    · Disponible
+                  </span>
+                </span>
               </label>
             </div>
           </div>
@@ -153,6 +213,7 @@
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '../../stores/auth'
+import { mapStaffOptionsWithAssignment } from '../../utils/staffAssignment'
 
 const auth = useAuthStore()
 const router = useRouter()
@@ -168,11 +229,24 @@ const isEditing = ref(false)
 const isSaving = ref(false)
 const isDeleting = ref(false)
 const isLoadingAdmins = ref(false)
+const isLoadingStaffs = ref(false)
 const formError = ref(null)
 const restaurantToDelete = ref(null)
 const deleteConfirmed = ref(false)
 const adminOptions = ref([])
+const staffOptions = ref([])
 const isOnlyOwnAdminSelectable = computed(() => auth.userRole === 'admin' && auth.userRole !== 'superadmin')
+const staffOptionsWithAssignment = computed(() => {
+  const selectedAdminId = form.value.adminId ? Number(form.value.adminId) : null
+  const isSuperadmin = auth.userRole === 'superadmin'
+  return mapStaffOptionsWithAssignment({
+    staffOptions: staffOptions.value,
+    restaurants: restaurants.value,
+    currentRestaurantId: form.value.id ? Number(form.value.id) : null,
+    selectedAdminId,
+    isSuperadmin,
+  })
+})
 
 const toast = ref({ show: false, type: 'success', message: '' })
 let toastTimer = null
@@ -183,7 +257,8 @@ const form = ref({
   address: '',
   phone: '',
   active: true,
-  adminIds: []
+  adminId: null,
+  staffIds: []
 })
 
 function showToast(message, type = 'success') {
@@ -199,6 +274,10 @@ function formatDate(date) {
   const dateObj = new Date(date)
   const options = { year: 'numeric', month: '2-digit', day: '2-digit' }
   return dateObj.toLocaleDateString('es-ES', options)
+}
+
+function hasAdmins(restaurant) {
+  return Array.isArray(restaurant?.admins) && restaurant.admins.length > 0
 }
 
 async function fetchRestaurants() {
@@ -273,7 +352,33 @@ function resetForm() {
     address: '',
     phone: '',
     active: true,
-    adminIds: []
+    adminId: null,
+    staffIds: []
+  }
+}
+
+async function fetchStaffOptions() {
+  if (!auth.token) return
+
+  isLoadingStaffs.value = true
+  try {
+    const response = await fetch('/api/users', {
+      headers: {
+        'Authorization': `Bearer ${auth.token}`,
+        'Accept': 'application/json'
+      }
+    })
+
+    if (!response.ok) throw new Error('No se pudo cargar la lista de staffs')
+
+    const data = await response.json()
+    const users = Array.isArray(data) ? data : []
+    staffOptions.value = users.filter(user => user?.role?.name === 'staff')
+  } catch (err) {
+    staffOptions.value = []
+    showToast(err.message, 'error')
+  } finally {
+    isLoadingStaffs.value = false
   }
 }
 
@@ -281,10 +386,10 @@ async function openCreateModal() {
   isEditing.value = false
   formError.value = null
   resetForm()
-  await fetchAdminOptions()
+  await Promise.all([fetchAdminOptions(), fetchStaffOptions()])
 
   if (auth.userRole === 'admin' && auth.user) {
-    form.value.adminIds = [auth.user.id]
+    form.value.adminId = auth.user.id
   }
 
   showFormModal.value = true
@@ -293,11 +398,11 @@ async function openCreateModal() {
 async function openEditModal(restaurant) {
   isEditing.value = true
   formError.value = null
-  await fetchAdminOptions()
+  await Promise.all([fetchAdminOptions(), fetchStaffOptions()])
 
-  const currentAdminIds = Array.isArray(restaurant.admins)
-    ? restaurant.admins.map(admin => admin.id)
-    : []
+  const currentAdminId = Array.isArray(restaurant.admins) && restaurant.admins.length
+    ? restaurant.admins[0].id
+    : null
 
   form.value = {
     id: restaurant.id,
@@ -305,24 +410,37 @@ async function openEditModal(restaurant) {
     address: restaurant.address || '',
     phone: restaurant.phone || '',
     active: Boolean(restaurant.active),
-    adminIds: currentAdminIds
+    adminId: currentAdminId,
+    staffIds: Array.isArray(restaurant.staffs) ? restaurant.staffs.map(staff => Number(staff.id)) : []
   }
 
-  if (auth.userRole === 'admin' && auth.user && !form.value.adminIds.includes(auth.user.id)) {
-    form.value.adminIds = [auth.user.id]
+  if (auth.userRole === 'admin' && auth.user && form.value.adminId !== auth.user.id) {
+    form.value.adminId = auth.user.id
   }
 
   showFormModal.value = true
 }
 
-function openMenuEditor(restaurant) {
-  router.push({
-    path: '/admin/products',
-    query: {
-      restaurantId: String(restaurant.id),
-      restaurantName: restaurant.name || ''
-    }
-  })
+function navigateWithTabOption(path, event) {
+  if (event?.metaKey || event?.ctrlKey) {
+    const targetRoute = router.resolve({ path })
+    window.open(targetRoute.href, '_blank', 'noopener')
+    return
+  }
+
+  router.push({ path })
+}
+
+function openOperations(restaurant, event) {
+  navigateWithTabOption(`/admin/restaurants/${restaurant.id}/operations`, event)
+}
+
+function openCaja(restaurant, event) {
+  navigateWithTabOption(`/caja/${restaurant.id}`, event)
+}
+
+function openCocina(restaurant, event) {
+  navigateWithTabOption(`/cocina/${restaurant.id}`, event)
 }
 
 function closeFormModal() {
@@ -341,6 +459,10 @@ async function saveRestaurant() {
   formError.value = null
 
   try {
+    if (!form.value.adminId) {
+      throw new Error('Debes seleccionar un admin para el restaurante')
+    }
+
     const url = isEditing.value ? `/api/restaurants/${form.value.id}` : '/api/restaurants'
     const method = isEditing.value ? 'PUT' : 'POST'
 
@@ -379,6 +501,11 @@ async function saveRestaurant() {
     const shouldSyncAdmins = restaurantId && (isEditing.value || auth.userRole === 'superadmin' || auth.userRole === 'admin')
     if (shouldSyncAdmins) {
       await syncRestaurantAdmins(restaurantId)
+      const hasSelectedStaff = Array.isArray(form.value.staffIds) && form.value.staffIds.length > 0
+      const shouldSyncStaffs = isEditing.value || hasSelectedStaff
+      if (shouldSyncStaffs) {
+        await syncRestaurantStaffs(restaurantId)
+      }
     }
 
     closeFormModal()
@@ -401,13 +528,32 @@ async function syncRestaurantAdmins(restaurantId) {
       'Accept': 'application/json'
     },
     body: JSON.stringify({
-      admin_ids: Array.isArray(form.value.adminIds) ? form.value.adminIds : []
+      admin_ids: form.value.adminId ? [Number(form.value.adminId)] : []
     })
   })
 
   if (!response.ok) {
     const data = await response.json().catch(() => null)
     throw new Error(data?.message || 'No se pudieron actualizar los admins del restaurante')
+  }
+}
+
+async function syncRestaurantStaffs(restaurantId) {
+  const response = await fetch(`/api/restaurants/${restaurantId}/staffs`, {
+    method: 'PUT',
+    headers: {
+      'Authorization': `Bearer ${auth.token}`,
+      'Content-Type': 'application/json',
+      'Accept': 'application/json'
+    },
+    body: JSON.stringify({
+      staff_ids: Array.isArray(form.value.staffIds) ? form.value.staffIds.map(id => Number(id)) : []
+    })
+  })
+
+  if (!response.ok) {
+    const data = await response.json().catch(() => null)
+    throw new Error(data?.message || 'No se pudieron actualizar los staffs del restaurante')
   }
 }
 
@@ -646,6 +792,48 @@ onMounted(() => {
   padding-top: 0.9rem;
 }
 
+.operations-menu {
+  margin-top: 0.65rem;
+  border: 1px solid #ecf0f1;
+  border-radius: 8px;
+  background: #f8fafc;
+}
+
+.operations-menu summary {
+  cursor: pointer;
+  list-style: none;
+  padding: 0.65rem 0.8rem;
+  color: #2c3e50;
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+.operations-menu summary::-webkit-details-marker {
+  display: none;
+}
+
+.operations-links {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.4rem;
+  padding: 0 0.65rem 0.65rem;
+}
+
+.btn-op {
+  border: none;
+  border-radius: 6px;
+  padding: 0.5rem 0.65rem;
+  text-align: left;
+  font-weight: 600;
+  color: #1f3b5b;
+  background: #eaf1ff;
+  cursor: pointer;
+}
+
+.btn-op:hover {
+  background: #dce8ff;
+}
+
 .btn-action,
 .btn-delete {
   flex: 1;
@@ -655,10 +843,17 @@ onMounted(() => {
   color: white;
   cursor: pointer;
   transition: opacity 0.3s ease;
+  text-align: center;
+  text-decoration: none;
+  display: inline-block;
 }
 
 .btn-action {
   background: #667eea;
+}
+
+.btn-main-ops {
+  flex: 2;
 }
 
 .btn-delete {
@@ -782,6 +977,20 @@ onMounted(() => {
   margin-bottom: 0;
   color: #2c3e50;
   font-weight: 500;
+}
+
+.admin-item-disabled {
+  opacity: 0.7;
+}
+
+.staff-assigned-info {
+  color: #b23b2a;
+  font-weight: 600;
+}
+
+.staff-available-info {
+  color: #2e7d32;
+  font-weight: 600;
 }
 
 .form-actions {

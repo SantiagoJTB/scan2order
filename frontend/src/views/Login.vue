@@ -20,6 +20,15 @@
         </button>
       </form>
 
+      <div class="divider">
+        <span>o</span>
+      </div>
+
+      <button class="btn-google" type="button">
+        <span class="google-icon">🔐</span>
+        Iniciar sesión con Google
+      </button>
+
       <div class="demo-accounts">
         <p><strong>Cuentas de prueba:</strong></p>
         <p>Superadmin: superadmin@scan2order.local / superadmin123</p>
@@ -48,9 +57,15 @@ const auth = useAuthStore()
 
 function getDefaultRouteByRole(role) {
   if (role === 'superadmin' || role === 'admin') return '/admin'
-  if (role === 'caja') return '/caja'
-  if (role === 'cocina') return '/cocina'
-  if (role === 'cliente') return '/menu'
+  if (role === 'staff') {
+    // Staff should always access via their linked restaurant
+    if (auth.staffRestaurantId) {
+      return `/staff/${auth.staffRestaurantId}`
+    }
+    // Fallback: if no restaurant is assigned, go to generic staff dashboard
+    return '/staff'
+  }
+  if (role === 'cliente') return '/restaurants'
   return '/'
 }
 
@@ -152,6 +167,56 @@ async function handleLogin() {
 .btn-login:disabled {
   opacity: 0.6;
   cursor: not-allowed;
+}
+
+.divider {
+  position: relative;
+  text-align: center;
+  margin: 1.5rem 0;
+}
+
+.divider::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: #e0e0e0;
+}
+
+.divider span {
+  position: relative;
+  background: white;
+  padding: 0 1rem;
+  color: #7f8c8d;
+  font-size: 0.9rem;
+}
+
+.btn-google {
+  width: 100%;
+  padding: 0.75rem;
+  background: white;
+  color: #444;
+  border: 2px solid #e0e0e0;
+  border-radius: 5px;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+}
+
+.btn-google:hover {
+  background: #f8f9fa;
+  border-color: #d0d0d0;
+}
+
+.google-icon {
+  font-size: 1.2rem;
 }
 
 .demo-accounts {

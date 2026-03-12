@@ -34,7 +34,7 @@ services:
       - DB_PASSWORD=password
       - APP_ENV=local
       - APP_DEBUG=true
-      - APP_URL=http://localhost:8080
+      - APP_URL=http://192.168.1.132:8080
     entrypoint: ["sh","-c","cp /var/www/html/.env.example /var/www/html/.env && php artisan key:generate --force && php artisan migrate --force && chown -R www-data:www-data /var/www/html/storage /var/www/html/bootstrap/cache && php-fpm"]
     ports:
       - "9000:9000"
@@ -60,7 +60,7 @@ services:
       dockerfile: Dockerfile
     container_name: scan2order-nginx
     ports:
-      - "8080:80"
+      - "0.0.0.0:8080:80"
     depends_on:
       - backend
       - frontend

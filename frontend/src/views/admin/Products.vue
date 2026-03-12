@@ -4,30 +4,79 @@
 
     <div class="header">
       <h1>📋 Gestión de Catálogos y Productos</h1>
+      <button v-if="selectedRestaurantId" @click="backToList" class="btn-back">← Volver a lista</button>
     </div>
 
-    <div v-if="selectedRestaurantId" class="restaurant-context">
-      📍 Restaurante: <strong>{{ selectedRestaurantName }}</strong>
+    <!-- Restaurant List View -->
+    <div v-if="!selectedRestaurantId" class="restaurants-stats">
+      <div v-if="isLoadingStats" class="loading">Cargando restaurantes...</div>
+      <div v-else-if="restaurantsStats.length === 0" class="empty-state">
+        <p>No hay restaurantes disponibles</p>
+      </div>
+      <div v-else class="stats-grid">
+        <div v-for="restaurant in restaurantsStats" :key="restaurant.id" class="restaurant-card" @click="selectRestaurant(restaurant)">
+          <div class="restaurant-card-header">
+            <h3>{{ restaurant.name }}</h3>
+            <p class="restaurant-info">📍 {{ restaurant.address }} | ☎️ {{ restaurant.phone }}</p>
+          </div>
+          <div class="restaurant-stats">
+            <div class="stat-item">
+              <span class="stat-label">Menús/Catálogos</span>
+              <span class="stat-value">{{ restaurant.menus_count }}</span>
+            </div>
+            <div class="stat-item">
+              <span class="stat-label">Productos Totales</span>
+              <span class="stat-value">{{ restaurant.total_products }}</span>
+            </div>
+          </div>
+          <div v-if="restaurant.products_per_menu.length > 0" class="products-per-menu">
+            <h4>Productos por Menú:</h4>
+            <ul>
+              <li v-for="(menu, idx) in restaurant.products_per_menu" :key="idx">
+                <strong>{{ menu.menu_name }}:</strong> {{ menu.products_count }} productos
+              </li>
+            </ul>
+          </div>
+        </div>
+      </div>
     </div>
 
-    <div v-if="isLoading" class="loading">Cargando catálogos...</div>
-    <div v-else-if="!selectedRestaurantId" class="empty-state">
-      <p>⚠️ Selecciona primero un restaurante desde la gestión de restaurantes</p>
-    </div>
-    <div v-else class="content">
+    <!-- Restaurant Detail View -->
+    <div v-if="selectedRestaurantId" class="restaurant-detail">
+      <div class="restaurant-context">
+        📍 Restaurante: <strong>{{ selectedRestaurantName }}</strong>
+      </div>
+
+      <div class="tools-row">
+        <input
+          v-model="searchQuery"
+          type="text"
+          class="search-input"
+          placeholder="Buscar en catálogos, secciones y productos..."
+        />
+        <button v-if="searchQuery" class="btn-clear-search" @click="searchQuery = ''">Limpiar</button>
+      </div>
+
+      <div v-if="isLoading" class="loading">Cargando catálogos...</div>
+      <div v-else class="content">
       <div class="catalogs-list">
         <div v-if="catalogs.length === 0" class="empty-section">
           <p>No hay catálogos creados</p>
-          <button class="btn-primary" @click="openCatalogForm">+ Crear primer catálogo</button>
+          <button class="btn-primary" @click="openCatalogForm()">+ Crear primer catálogo</button>
         </div>
 
-        <div v-for="catalog in catalogs" :key="catalog.id" class="catalog-card">
+        <div v-else-if="filteredCatalogs.length === 0" class="empty-section">
+          <p>No hay resultados para la búsqueda</p>
+        </div>
+
+        <div v-for="catalog in filteredCatalogs" :key="catalog.id" class="catalog-card">
           <div class="catalog-header">
             <div class="catalog-info">
               <h3>{{ catalog.name }}</h3>
               <p>{{ catalog.description || 'Sin descripción' }}</p>
             </div>
             <div class="catalog-actions">
+              <button class="btn-icon" @click="openPriceAdjustModal(catalog)" title="Ajustar precios por porcentaje">💹</button>
               <button class="btn-icon" @click="editCatalog(catalog)" title="Editar">✏️</button>
               <button class="btn-icon btn-danger" @click="deleteCatalog(catalog)" title="Eliminar">🗑️</button>
             </div>
@@ -55,6 +104,8 @@
                 </div>
 
                 <div v-for="product in section.products" :key="product.id" class="product-item">
+                  <img v-if="product.image" :src="`/storage/${product.image}`" alt="" class="product-thumbnail" />
+                  <div v-else class="product-no-image">📦</div>
                   <div class="product-name">{{ product.name }}</div>
                   <div class="product-price">${{ product.price }}</div>
                   <div class="product-actions">
@@ -71,8 +122,9 @@
           </div>
         </div>
 
-        <button class="btn-primary btn-large" @click="openCatalogForm">+ Crear nuevo catálogo</button>
+        <button class="btn-primary btn-large" @click="openCatalogForm()">+ Crear nuevo catálogo</button>
       </div>
+    </div>
     </div>
   </div>
 
@@ -144,6 +196,16 @@
           <label>Precio:</label>
           <input v-model.number="productForm.price" type="number" step="0.01" required placeholder="0.00" />
         </div>
+        <div class="form-group">
+          <label>Imagen (opcional):</label>
+          <input type="file" @change="handleImageChange" accept="image/*" class="file-input" />
+          <small class="help-text">Formatos: JPG, PNG, GIF, WEBP. Máximo 2MB</small>
+          
+          <div v-if="productImagePreview" class="image-preview">
+            <img :src="productImagePreview" alt="Vista previa" />
+            <button type="button" @click="removeImage" class="btn-remove-image">✕ Eliminar imagen</button>
+          </div>
+        </div>
         <div class="form-actions">
           <button type="button" @click="closeProductModal" class="btn-cancel">Cancelar</button>
           <button type="submit" class="btn-save">{{ editingProduct ? 'Actualizar' : 'Crear' }}</button>
@@ -152,51 +214,155 @@
     </div>
   </div>
 
-  <div v-else class="products-container">
+  <!-- Catalog Price Adjust Modal -->
+  <div v-if="showPriceAdjustModal" class="modal-overlay">
+    <div class="modal">
+      <div class="modal-header">
+        <h2>Ajustar precios por porcentaje</h2>
+        <button @click="closePriceAdjustModal" class="btn-close">×</button>
+      </div>
+      <form @submit.prevent="applyCatalogPriceAdjustment" class="modal-body">
+        <p class="price-adjust-context">
+          Catálogo: <strong>{{ selectedCatalogForPrice?.name }}</strong>
+        </p>
+
+        <div class="form-group">
+          <label>Acción:</label>
+          <select v-model="priceAdjustForm.mode">
+            <option value="increase">Aumentar</option>
+            <option value="decrease">Disminuir</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label>Porcentaje (%):</label>
+          <input v-model.number="priceAdjustForm.percent" type="number" min="0.01" step="0.01" required placeholder="Ej: 10" />
+        </div>
+
+        <div class="form-actions">
+          <button type="button" @click="closePriceAdjustModal" class="btn-cancel">Cancelar</button>
+          <button type="submit" class="btn-save" :disabled="isApplyingPriceAdjust">
+            {{ isApplyingPriceAdjust ? 'Aplicando...' : 'Aplicar' }}
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div v-else-if="auth.initialized && !checkingAccess && !canAccessAdmin" class="products-container">
     <div class="content">
       <div class="info-box">
         <h2>⛔ Acceso denegado</h2>
-        <p>Solo Admin y Superadmin pueden acceder a esta sección.</p>
+        <p>Solo Admin, Superadmin, Caja y Cocina pueden acceder a esta sección.</p>
       </div>
     </div>
   </div>
+
 </template>
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '../../stores/auth'
 
 const auth = useAuthStore()
 const route = useRoute()
+const router = useRouter()
 
-const canAccessAdmin = computed(() => auth.hasAnyRole(['admin', 'superadmin']))
+const canAccessAdmin = computed(() => auth.hasAnyRole(['admin', 'superadmin', 'staff']))
+const checkingAccess = ref(true)
 const selectedRestaurantId = ref(null)
 const selectedRestaurantName = ref('')
 const catalogs = ref([])
+const searchQuery = ref('')
 const isLoading = ref(false)
+const isLoadingStats = ref(false)
+const restaurantsStats = ref([])
 const toast = ref({ show: false, type: 'success', message: '' })
 
 const showCatalogModal = ref(false)
 const editingCatalog = ref(null)
-const catalogForm = ref({ name: '', description: '' })
+const catalogForm = ref({ name: '', description: '', active: true, order: 0 })
 
 const showSectionModal = ref(false)
 const editingSection = ref(null)
 const selectedCatalog = ref(null)
-const sectionForm = ref({ name: '', description: '' })
+const sectionForm = ref({ name: '', description: '', active: true, order: 0 })
 
 const showProductModal = ref(false)
 const editingProduct = ref(null)
 const selectedSection = ref(null)
-const productForm = ref({ name: '', description: '', price: 0 })
+const productForm = ref({ name: '', description: '', price: 0, active: true })
+const productImageFile = ref(null)
+const productImagePreview = ref(null)
+const removeProductImage = ref(false)
+const showPriceAdjustModal = ref(false)
+const isApplyingPriceAdjust = ref(false)
+const selectedCatalogForPrice = ref(null)
+const priceAdjustForm = ref({ mode: 'increase', percent: 0 })
 
-onMounted(() => {
+const filteredCatalogs = computed(() => {
+  const term = (searchQuery.value || '').trim().toLowerCase()
+  if (!term) return catalogs.value
+
+  const contains = (value) => String(value || '').toLowerCase().includes(term)
+
+  return catalogs.value
+    .map((catalog) => {
+      const catalogMatch = contains(catalog.name) || contains(catalog.description)
+
+      if (catalogMatch) {
+        return { ...catalog, sections: catalog.sections || [] }
+      }
+
+      const filteredSections = (catalog.sections || [])
+        .map((section) => {
+          const sectionMatch = contains(section.name) || contains(section.description)
+          if (sectionMatch) {
+            return { ...section, products: section.products || [] }
+          }
+
+          const filteredProducts = (section.products || []).filter(
+            (product) => contains(product.name) || contains(product.description)
+          )
+
+          if (filteredProducts.length > 0) {
+            return { ...section, products: filteredProducts }
+          }
+
+          return null
+        })
+        .filter(Boolean)
+
+      if (filteredSections.length > 0) {
+        return { ...catalog, sections: filteredSections }
+      }
+
+      return null
+    })
+    .filter(Boolean)
+})
+
+onMounted(async () => {
+  if (!auth.initialized) {
+    await auth.initFromStorage()
+  }
+
+  if (!canAccessAdmin.value) {
+    checkingAccess.value = false
+    return
+  }
+
   selectedRestaurantId.value = route.query.restaurantId
   selectedRestaurantName.value = route.query.restaurantName || ''
+
   if (selectedRestaurantId.value) {
-    fetchCatalogs()
+    await fetchCatalogs()
+  } else {
+    await fetchRestaurantsStats()
   }
+
+  checkingAccess.value = false
 })
 
 function showToast(message, type = 'success') {
@@ -204,6 +370,47 @@ function showToast(message, type = 'success') {
   setTimeout(() => {
     toast.value.show = false
   }, 2500)
+}
+
+async function fetchRestaurantsStats() {
+  isLoadingStats.value = true
+  try {
+    const response = await fetch('/api/restaurants/stats', {
+      headers: {
+        'Authorization': `Bearer ${auth.token}`,
+        'Accept': 'application/json'
+      }
+    })
+
+    if (!response.ok) throw new Error('Error al cargar estadísticas')
+    restaurantsStats.value = await response.json()
+  } catch (err) {
+    showToast(err.message, 'error')
+  } finally {
+    isLoadingStats.value = false
+  }
+}
+
+function selectRestaurant(restaurant) {
+  selectedRestaurantId.value = restaurant.id
+  selectedRestaurantName.value = restaurant.name
+  router.push({ 
+    path: '/admin/products', 
+    query: { 
+      restaurantId: restaurant.id, 
+      restaurantName: restaurant.name 
+    } 
+  })
+  fetchCatalogs()
+}
+
+function backToList() {
+  selectedRestaurantId.value = null
+  selectedRestaurantName.value = ''
+  searchQuery.value = ''
+  catalogs.value = []
+  router.push({ path: '/admin/products' })
+  fetchRestaurantsStats()
 }
 
 async function fetchCatalogs() {
@@ -216,6 +423,12 @@ async function fetchCatalogs() {
         'Accept': 'application/json'
       }
     })
+
+    if (response.status === 401 || response.status === 403) {
+      showToast('No tienes permiso para acceder a este restaurante', 'error')
+      return
+    }
+
     if (!response.ok) throw new Error('Error al cargar catálogos')
     catalogs.value = await response.json()
   } catch (err) {
@@ -226,12 +439,17 @@ async function fetchCatalogs() {
 }
 
 function openCatalogForm(catalog = null) {
-  if (catalog) {
+  if (catalog && catalog.id) {
     editingCatalog.value = catalog
-    catalogForm.value = { name: catalog.name, description: catalog.description }
+    catalogForm.value = { 
+      name: catalog.name, 
+      description: catalog.description || '',
+      active: catalog.active !== undefined ? catalog.active : true,
+      order: catalog.order || 0
+    }
   } else {
     editingCatalog.value = null
-    catalogForm.value = { name: '', description: '' }
+    catalogForm.value = { name: '', description: '', active: true, order: 0 }
   }
   showCatalogModal.value = true
 }
@@ -243,10 +461,15 @@ function closeCatalogModal() {
 
 async function saveCatalog() {
   try {
-    const url = editingCatalog.value
+    if (!selectedRestaurantId.value) {
+      throw new Error('Selecciona un restaurante antes de guardar el catálogo')
+    }
+
+    const isEdit = Boolean(editingCatalog.value && editingCatalog.value.id)
+    const url = isEdit
       ? `/api/restaurants/${selectedRestaurantId.value}/catalogs/${editingCatalog.value.id}`
       : `/api/restaurants/${selectedRestaurantId.value}/catalogs`
-    const method = editingCatalog.value ? 'PUT' : 'POST'
+    const method = isEdit ? 'PUT' : 'POST'
 
     const response = await fetch(url, {
       method,
@@ -257,10 +480,21 @@ async function saveCatalog() {
       body: JSON.stringify(catalogForm.value)
     })
 
-    if (!response.ok) throw new Error('Error al guardar catálogo')
+    if (!response.ok) {
+      let message = 'Error al guardar catálogo'
+      try {
+        const data = await response.json()
+        message = data?.message || message
+      } catch {
+        // ignore json parsing errors
+      }
+      throw new Error(message)
+    }
+
+    const wasEdit = isEdit
     closeCatalogModal()
     await fetchCatalogs()
-    showToast(editingCatalog.value ? 'Catálogo actualizado' : 'Catálogo creado')
+    showToast(wasEdit ? 'Catálogo actualizado' : 'Catálogo creado')
   } catch (err) {
     showToast(err.message, 'error')
   }
@@ -285,10 +519,15 @@ function openSectionForm(catalog, section = null) {
   selectedCatalog.value = catalog
   if (section) {
     editingSection.value = section
-    sectionForm.value = { name: section.name, description: section.description }
+    sectionForm.value = { 
+      name: section.name, 
+      description: section.description || '',
+      active: section.active !== undefined ? section.active : true,
+      order: section.order || 0
+    }
   } else {
     editingSection.value = null
-    sectionForm.value = { name: '', description: '' }
+    sectionForm.value = { name: '', description: '', active: true, order: 0 }
   }
   showSectionModal.value = true
 }
@@ -346,12 +585,24 @@ async function deleteSection(catalog, section) {
 function openProductForm(catalog, section, product = null) {
   selectedCatalog.value = catalog
   selectedSection.value = section
+  productImageFile.value = null
+  productImagePreview.value = null
+  removeProductImage.value = false
   if (product) {
     editingProduct.value = product
-    productForm.value = { name: product.name, description: product.description, price: product.price }
+    productForm.value = { 
+      name: product.name, 
+      description: product.description || '', 
+      price: product.price || 0,
+      active: product.active !== undefined ? product.active : true
+    }
+    // Set preview to existing image if available
+    if (product.image) {
+      productImagePreview.value = `/storage/${product.image}`
+    }
   } else {
     editingProduct.value = null
-    productForm.value = { name: '', description: '', price: 0 }
+    productForm.value = { name: '', description: '', price: 0, active: true }
   }
   showProductModal.value = true
 }
@@ -360,6 +611,29 @@ function closeProductModal() {
   showProductModal.value = false
   editingProduct.value = null
   selectedSection.value = null
+  productImageFile.value = null
+  productImagePreview.value = null
+  removeProductImage.value = false
+}
+
+function handleImageChange(event) {
+  const file = event.target.files[0]
+  if (file) {
+    productImageFile.value = file
+    removeProductImage.value = false
+    // Create preview
+    const reader = new FileReader()
+    reader.onload = (e) => {
+      productImagePreview.value = e.target.result
+    }
+    reader.readAsDataURL(file)
+  }
+}
+
+function removeImage() {
+  productImageFile.value = null
+  productImagePreview.value = null
+  removeProductImage.value = true
 }
 
 async function saveProduct() {
@@ -369,13 +643,33 @@ async function saveProduct() {
       : `/api/restaurants/${selectedRestaurantId.value}/catalogs/${selectedCatalog.value.id}/sections/${selectedSection.value.id}/products`
     const method = editingProduct.value ? 'PUT' : 'POST'
 
+    // Use FormData for file upload
+    const formData = new FormData()
+    formData.append('name', productForm.value.name)
+    formData.append('description', productForm.value.description || '')
+    formData.append('price', productForm.value.price)
+    formData.append('active', productForm.value.active ? '1' : '0')
+    
+    if (productImageFile.value) {
+      formData.append('image', productImageFile.value)
+    }
+    
+    if (removeProductImage.value) {
+      formData.append('remove_image', '1')
+    }
+
+    // For PUT requests, we need to use POST with _method override
+    if (method === 'PUT') {
+      formData.append('_method', 'PUT')
+    }
+
     const response = await fetch(url, {
-      method,
+      method: method === 'PUT' ? 'POST' : method,
       headers: {
         'Authorization': `Bearer ${auth.token}`,
-        'Content-Type': 'application/json'
+        // Don't set Content-Type, let browser set it with boundary for FormData
       },
-      body: JSON.stringify(productForm.value)
+      body: formData
     })
 
     if (!response.ok) throw new Error('Error al guardar producto')
@@ -409,6 +703,85 @@ async function deleteProduct(catalog, section, product) {
 function editCatalog(catalog) {
   openCatalogForm(catalog)
 }
+
+function openPriceAdjustModal(catalog) {
+  selectedCatalogForPrice.value = catalog
+  priceAdjustForm.value = { mode: 'increase', percent: 0 }
+  showPriceAdjustModal.value = true
+}
+
+function closePriceAdjustModal() {
+  showPriceAdjustModal.value = false
+  selectedCatalogForPrice.value = null
+}
+
+async function applyCatalogPriceAdjustment() {
+  const catalog = selectedCatalogForPrice.value
+  const percent = Number(priceAdjustForm.value.percent)
+
+  if (!catalog) {
+    showToast('Catálogo no válido', 'error')
+    return
+  }
+
+  if (!Number.isFinite(percent) || percent <= 0) {
+    showToast('El porcentaje debe ser mayor que 0', 'error')
+    return
+  }
+
+  const factor = priceAdjustForm.value.mode === 'decrease'
+    ? 1 - (percent / 100)
+    : 1 + (percent / 100)
+
+  if (factor <= 0) {
+    showToast('El porcentaje de disminución es demasiado alto', 'error')
+    return
+  }
+
+  const productsToUpdate = (catalog.sections || []).flatMap((section) =>
+    (section.products || []).map((product) => ({ sectionId: section.id, product }))
+  )
+
+  if (productsToUpdate.length === 0) {
+    showToast('No hay productos en este catálogo', 'error')
+    return
+  }
+
+  isApplyingPriceAdjust.value = true
+
+  try {
+    for (const item of productsToUpdate) {
+      const currentPrice = Number(item.product.price) || 0
+      const adjustedPrice = Math.max(0, Number((currentPrice * factor).toFixed(2)))
+
+      const response = await fetch(
+        `/api/restaurants/${selectedRestaurantId.value}/catalogs/${catalog.id}/sections/${item.sectionId}/products/${item.product.id}`,
+        {
+          method: 'PUT',
+          headers: {
+            'Authorization': `Bearer ${auth.token}`,
+            'Content-Type': 'application/json',
+            'Accept': 'application/json'
+          },
+          body: JSON.stringify({ price: adjustedPrice })
+        }
+      )
+
+      if (!response.ok) {
+        throw new Error(`Error al actualizar precio en producto ${item.product.name}`)
+      }
+    }
+
+    closePriceAdjustModal()
+    await fetchCatalogs()
+    const actionText = priceAdjustForm.value.mode === 'decrease' ? 'disminuidos' : 'aumentados'
+    showToast(`Precios ${actionText} ${percent}% en ${productsToUpdate.length} productos`)
+  } catch (err) {
+    showToast(err.message, 'error')
+  } finally {
+    isApplyingPriceAdjust.value = false
+  }
+}
 </script>
 
 <style scoped>
@@ -421,11 +794,128 @@ function editCatalog(catalog) {
 .header {
   margin-bottom: 2rem;
   color: #2c3e50;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
 }
 
 .header h1 {
   font-size: 2rem;
   margin: 0;
+}
+
+.btn-back {
+  background: #95a5a6;
+  color: white;
+  border: none;
+  padding: 0.6rem 1.2rem;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 1rem;
+  transition: background 0.2s;
+}
+
+.btn-back:hover {
+  background: #7f8c8d;
+}
+
+/* Restaurant Stats View */
+.restaurants-stats {
+  padding: 1rem;
+}
+
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+  gap: 1.5rem;
+  margin-top: 1rem;
+}
+
+.restaurant-card {
+  background: white;
+  border: 2px solid #e8eef3;
+  border-radius: 10px;
+  padding: 1.5rem;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.restaurant-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 4px 16px rgba(52, 152, 219, 0.2);
+  border-color: #3498db;
+}
+
+.restaurant-card-header h3 {
+  margin: 0 0 0.5rem 0;
+  color: #2c3e50;
+  font-size: 1.4rem;
+}
+
+.restaurant-info {
+  color: #7f8c8d;
+  font-size: 0.9rem;
+  margin: 0;
+}
+
+.restaurant-stats {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+  margin: 1.5rem 0;
+  padding: 1rem 0;
+  border-top: 1px solid #ecf0f1;
+  border-bottom: 1px solid #ecf0f1;
+}
+
+.stat-item {
+  display: flex;
+  flex-direction: column;
+  text-align: center;
+}
+
+.stat-label {
+  font-size: 0.85rem;
+  color: #7f8c8d;
+  margin-bottom: 0.3rem;
+}
+
+.stat-value {
+  font-size: 1.8rem;
+  font-weight: bold;
+  color: #3498db;
+}
+
+.products-per-menu {
+  margin-top: 1rem;
+}
+
+.products-per-menu h4 {
+  font-size: 0.95rem;
+  color: #2c3e50;
+  margin: 0 0 0.5rem 0;
+}
+
+.products-per-menu ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.products-per-menu li {
+  padding: 0.3rem 0;
+  font-size: 0.9rem;
+  color: #34495e;
+}
+
+.products-per-menu li strong {
+  color: #2c3e50;
+}
+
+/* Restaurant Detail View */
+.restaurant-detail {
+  /* Inherits existing styles */
 }
 
 .restaurant-context {
@@ -435,6 +925,33 @@ function editCatalog(catalog) {
   border-radius: 8px;
   padding: 1rem;
   border-left: 4px solid #3498db;
+}
+
+.tools-row {
+  display: flex;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.search-input {
+  flex: 1;
+  padding: 0.7rem 0.85rem;
+  border: 1px solid #bdc3c7;
+  border-radius: 6px;
+  font-size: 0.95rem;
+}
+
+.btn-clear-search {
+  background: #ecf0f1;
+  color: #2c3e50;
+  border: none;
+  padding: 0.6rem 1rem;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.btn-clear-search:hover {
+  background: #d5dbdb;
 }
 
 .loading, .empty-state {
@@ -537,6 +1054,26 @@ function editCatalog(catalog) {
   padding: 0.5rem;
   border-radius: 4px;
   border: 1px solid #f5e6d3;
+  gap: 0.75rem;
+}
+
+.product-thumbnail {
+  width: 40px;
+  height: 40px;
+  object-fit: cover;
+  border-radius: 4px;
+  border: 1px solid #e0e0e0;
+}
+
+.product-no-image {
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #f5f5f5;
+  border-radius: 4px;
+  font-size: 1.2rem;
 }
 
 .product-name {
@@ -692,7 +1229,8 @@ function editCatalog(catalog) {
 }
 
 .form-group input,
-.form-group textarea {
+.form-group textarea,
+.form-group select {
   width: 100%;
   padding: 0.75rem;
   border: 1px solid #bdc3c7;
@@ -704,6 +1242,48 @@ function editCatalog(catalog) {
 .form-group textarea {
   resize: vertical;
   min-height: 80px;
+}
+
+.file-input {
+  padding: 0.5rem 0 !important;
+  border: none !important;
+  cursor: pointer;
+}
+
+.help-text {
+  display: block;
+  margin-top: 0.25rem;
+  color: #7f8c8d;
+  font-size: 0.85rem;
+}
+
+.image-preview {
+  margin-top: 1rem;
+  text-align: center;
+}
+
+.image-preview img {
+  max-width: 100%;
+  max-height: 200px;
+  border-radius: 8px;
+  border: 2px solid #e0e0e0;
+}
+
+.btn-remove-image {
+  display: block;
+  margin: 0.75rem auto 0;
+  background: #e74c3c;
+  color: white;
+  border: none;
+  padding: 0.5rem 1rem;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  transition: background 0.3s;
+}
+
+.btn-remove-image:hover {
+  background: #c0392b;
 }
 
 .form-actions {
@@ -740,6 +1320,15 @@ function editCatalog(catalog) {
 
 .btn-save:hover {
   background: #229954;
+}
+
+.price-adjust-context {
+  margin: 0 0 1rem;
+  color: #2c3e50;
+  background: #f5f8ff;
+  border: 1px solid #dbe6ff;
+  border-radius: 6px;
+  padding: 0.75rem;
 }
 
 .toast {

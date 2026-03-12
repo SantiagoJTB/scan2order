@@ -20,7 +20,15 @@ class PaymentController extends Controller
 
     public function createStripePaymentIntent(CreateStripePaymentIntentRequest $request, int $orderId): JsonResponse
     {
+        $user = $request->user();
+        if (!$user) {
+            return response()->json(['message' => 'Unauthorized'], 401);
+        }
+
         $order = Order::findOrFail($orderId);
+        if ($authError = $this->authorizeOrderAccess($user, $order, true)) {
+            return $authError;
+        }
 
         $amount = (float) ($request->validated('amount') ?? $order->total);
         $currency = strtolower($request->validated('currency') ?? 'eur');
@@ -57,21 +65,61 @@ class PaymentController extends Controller
 
     public function createCashPayment(Request $request, int $orderId): JsonResponse
     {
+        $user = $request->user();
+        if (!$user) {
+            return response()->json(['message' => 'Unauthorized'], 401);
+        }
+
         $order = Order::findOrFail($orderId);
+        if ($authError = $this->authorizeOrderAccess($user, $order, true)) {
+            return $authError;
+        }
 
         $amount = (float) ($request->input('amount') ?? $order->total);
         $currency = strtolower($request->input('currency') ?? 'eur');
+        $immediate = filter_var($request->input('immediate', false), FILTER_VALIDATE_BOOLEAN);
 
         try {
-            $payment = Payment::create([
-                'order_id' => $order->id,
-                'method' => 'cash',
-                'provider' => 'none',
-                'provider_payment_id' => null,
-                'amount' => $amount,
-                'currency' => $currency,
-                'status' => 'pending',
-            ]);
+            if ($immediate) {
+                $payment = Payment::where('order_id', $order->id)
+                    ->where('status', 'pending')
+                    ->latest('id')
+                    ->first();
+
+                if ($payment) {
+                    $payment->update([
+                        'method' => 'cash',
+                        'provider' => 'none',
+                        'amount' => $amount,
+                        'currency' => $currency,
+                        'status' => 'succeeded',
+                        'paid_at' => now(),
+                    ]);
+                } else {
+                    $payment = Payment::create([
+                        'order_id' => $order->id,
+                        'method' => 'cash',
+                        'provider' => 'none',
+                        'provider_payment_id' => null,
+                        'amount' => $amount,
+                        'currency' => $currency,
+                        'status' => 'succeeded',
+                        'paid_at' => now(),
+                    ]);
+                }
+
+                $order->update(['status' => 'paid']);
+            } else {
+                $payment = Payment::create([
+                    'order_id' => $order->id,
+                    'method' => 'cash',
+                    'provider' => 'none',
+                    'provider_payment_id' => null,
+                    'amount' => $amount,
+                    'currency' => $currency,
+                    'status' => 'pending',
+                ]);
+            }
 
             return response()->json([
                 'message' => 'Cash payment created successfully',
@@ -89,9 +137,101 @@ class PaymentController extends Controller
         }
     }
 
+    public function createTestPayment(Request $request, int $orderId): JsonResponse
+    {
+        $user = $request->user();
+        if (!$user) {
+            return response()->json(['message' => 'Unauthorized'], 401);
+        }
+
+        $order = Order::findOrFail($orderId);
+        if ($authError = $this->authorizeOrderAccess($user, $order, true)) {
+            return $authError;
+        }
+
+        $amount = (float) ($request->input('amount') ?? $order->total);
+        $currency = strtolower($request->input('currency') ?? 'eur');
+        $method = $request->input('method', 'test');
+
+        try {
+            // For table and cash payments, create as pending (payment collected later)
+            // For card payments, create as succeeded immediately
+            $isPending = in_array($method, ['table', 'cash']);
+            
+            $payment = Payment::create([
+                'order_id' => $order->id,
+                'method' => $method,
+                'provider' => 'test',
+                'provider_payment_id' => 'test_' . uniqid(),
+                'amount' => $amount,
+                'currency' => $currency,
+                'status' => $isPending ? 'pending' : 'succeeded',
+                'paid_at' => $isPending ? null : now(),
+            ]);
+
+            // Update order status to paid only if payment succeeded immediately
+            if (!$isPending) {
+                $order->update(['status' => 'paid']);
+            }
+
+            return response()->json([
+                'message' => 'Test payment created successfully',
+                'payment' => $payment,
+            ], 201);
+        } catch (\Throwable $e) {
+            Log::error('Test payment creation failed', [
+                'order_id' => $order->id,
+                'error' => $e->getMessage(),
+            ]);
+
+            return response()->json([
+                'message' => 'Failed to create test payment',
+            ], 500);
+        }
+    }
+
     public function show(Payment $payment): JsonResponse
     {
+        $user = request()->user();
+        if (!$user) {
+            return response()->json(['message' => 'Unauthorized'], 401);
+        }
+
+        $payment->load('order');
+        if ($authError = $this->authorizeOrderAccess($user, $payment->order, false)) {
+            return $authError;
+        }
+
         return response()->json($payment->load('order'));
+    }
+
+    private function authorizeOrderAccess($user, ?Order $order, bool $allowClientWhenOwner): ?JsonResponse
+    {
+        if (!$order) {
+            return response()->json(['message' => 'Order not found'], 404);
+        }
+
+        if ($user->hasRole('superadmin')) {
+            return null;
+        }
+
+        if ($user->hasRole('cliente')) {
+            if (!$allowClientWhenOwner || (int) $order->user_id !== (int) $user->id) {
+                return response()->json(['message' => 'Unauthorized'], 403);
+            }
+
+            return null;
+        }
+
+        if ($user->hasAnyRole(['admin', 'staff'])) {
+            if (!$this->canAccessRestaurant($user, (int) $order->restaurant_id)) {
+                return response()->json(['message' => 'Unauthorized'], 403);
+            }
+
+            return null;
+        }
+
+        return response()->json(['message' => 'Unauthorized'], 403);
     }
 
     public function handleStripeWebhook(Request $request): JsonResponse

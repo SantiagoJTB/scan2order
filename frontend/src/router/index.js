@@ -9,15 +9,20 @@ import Register from '../views/Register.vue'
 // Client views
 import ClientMenu from '../views/client/Menu.vue'
 import ClientCart from '../views/client/Cart.vue'
-
+import ClientRestaurants from '../views/client/Restaurants.vue'
+import ClientOrders from '../views/client/Orders.vue'
 import ClientCheckout from '../views/client/Checkout.vue'
 import ClientProfile from '../views/client/Profile.vue'
 // Admin views
 import AdminDashboard from '../views/admin/Dashboard.vue'
-import AdminUsers from '../views/admin/Users.vue'
 import AdminRestaurants from '../views/admin/Restaurants.vue'
 import AdminProducts from '../views/admin/Products.vue'
-import AdminOrders from '../views/admin/Orders.vue'
+import AdminUsers from '../views/admin/Users.vue'
+import AdminReports from '../views/admin/Reports.vue'
+import RestaurantOperations from '../views/admin/RestaurantOperations.vue'
+
+// Staff views
+import StaffDashboard from '../views/staff/Dashboard.vue'
 
 // Caja views
 import CajaPayments from '../views/caja/Payments.vue'
@@ -54,15 +59,21 @@ const routes = [
   
   // Client routes
   {
-    path: '/menu',
-    name: 'Menu',
-    component: ClientMenu,
+    path: '/restaurants',
+    name: 'ClientRestaurants',
+    component: ClientRestaurants,
     meta: { requiresAuth: true, roles: ['cliente'] }
   },
   {
     path: '/cart',
     name: 'Cart',
     component: ClientCart,
+    meta: { requiresAuth: true, roles: ['cliente'] }
+  },
+  {
+    path: '/orders',
+    name: 'ClientOrders',
+    component: ClientOrders,
     meta: { requiresAuth: true, roles: ['cliente'] }
   },
   {
@@ -85,44 +96,54 @@ const routes = [
     meta: { requiresAuth: true, roles: ['admin', 'superadmin'] }
   },
   {
-    path: '/admin/users',
-    name: 'AdminUsers',
-    component: AdminUsers,
-    meta: { requiresAuth: true, roles: ['admin', 'superadmin'] }
-  },
-  {
     path: '/admin/restaurants',
     name: 'AdminRestaurants',
     component: AdminRestaurants,
     meta: { requiresAuth: true, roles: ['admin', 'superadmin'] }
   },
   {
+    path: '/admin/users',
+    name: 'AdminUsers',
+    component: AdminUsers,
+    meta: { requiresAuth: true, roles: ['admin', 'superadmin'] }
+  },
+  {
     path: '/admin/products',
     name: 'AdminProducts',
     component: AdminProducts,
+    meta: { requiresAuth: true, roles: ['admin', 'superadmin', 'staff'] }
+  },
+  {
+    path: '/admin/reports',
+    name: 'AdminReports',
+    component: AdminReports,
     meta: { requiresAuth: true, roles: ['admin', 'superadmin'] }
   },
   {
-    path: '/admin/orders',
-    name: 'AdminOrders',
-    component: AdminOrders,
-    meta: { requiresAuth: true, roles: ['admin', 'superadmin'] }
+    path: '/admin/restaurants/:restaurantId/operations',
+    name: 'RestaurantOperations',
+    component: RestaurantOperations,
+    meta: { requiresAuth: true, roles: ['admin', 'superadmin', 'staff'] }
   },
 
-  // Caja routes
+  // Staff routes
   {
-    path: '/caja',
+    path: '/staff/:restaurantId?',
+    name: 'StaffDashboard',
+    component: StaffDashboard,
+    meta: { requiresAuth: true, roles: ['staff'] }
+  },
+  {
+    path: '/caja/:restaurantId?',
     name: 'CajaPayments',
     component: CajaPayments,
-    meta: { requiresAuth: true, roles: ['caja'] }
+    meta: { requiresAuth: true, roles: ['staff'] }
   },
-
-  // Cocina routes
   {
-    path: '/cocina',
+    path: '/cocina/:restaurantId?',
     name: 'CocinaOrders',
     component: CocinaOrders,
-    meta: { requiresAuth: true, roles: ['cocina'] }
+    meta: { requiresAuth: true, roles: ['staff'] }
   }
 ]
 
@@ -131,29 +152,40 @@ const router = createRouter({
   routes
 })
 
-function getDefaultRouteByRole(role) {
+function getDefaultRouteByRole(role, auth) {
   if (role === 'superadmin' || role === 'admin') return '/admin'
-  if (role === 'caja') return '/caja'
-  if (role === 'cocina') return '/cocina'
-  if (role === 'cliente') return '/menu'
+  if (role === 'staff') {
+    if (auth?.staffRestaurantId) return `/staff/${auth.staffRestaurantId}`
+    return '/staff'
+  }
+  if (role === 'cliente') return '/restaurants'
   return '/'
 }
 
 // Route guard
-router.beforeEach((to) => {
+router.beforeEach(async (to) => {
   const auth = useAuthStore()
 
-  if (!auth.user && auth.token) {
-    auth.initFromStorage()
+  const missingRole = !auth.user?.role?.name
+  if (auth.token && (!auth.user || missingRole)) {
+    await auth.initFromStorage()
   }
 
   const isPublic = Boolean(to.meta?.public)
   const requiresAuth = Boolean(to.meta?.requiresAuth)
   const allowedRoles = Array.isArray(to.meta?.roles) ? to.meta.roles : []
   const userRole = auth.userRole
-  const defaultRoute = getDefaultRouteByRole(userRole)
+  const defaultRoute = getDefaultRouteByRole(userRole, auth)
 
   if (isPublic) {
+    if (auth.isAuthenticated && to.name === 'Home' && userRole !== 'cliente') {
+      return defaultRoute
+    }
+
+    if (auth.isAuthenticated && to.name === 'RestaurantMenu' && userRole !== 'cliente') {
+      return defaultRoute
+    }
+
     if (auth.isAuthenticated && (to.name === 'Login' || to.name === 'Register')) {
       return defaultRoute
     }
@@ -170,6 +202,27 @@ router.beforeEach((to) => {
 
     if (allowedRoles.length > 0 && !allowedRoles.includes(userRole)) {
       return defaultRoute
+    }
+
+    if (userRole === 'staff') {
+      const assignedRestaurantId = auth.staffRestaurantId ? Number(auth.staffRestaurantId) : null
+      const isStaffScopedRoute = ['StaffDashboard', 'CajaPayments', 'CocinaOrders'].includes(String(to.name || ''))
+
+      if (isStaffScopedRoute && assignedRestaurantId) {
+        const routeRestaurantId = to.params?.restaurantId ? Number(to.params.restaurantId) : null
+
+        if (!routeRestaurantId || routeRestaurantId !== assignedRestaurantId) {
+          return {
+            name: to.name,
+            params: {
+              ...to.params,
+              restaurantId: assignedRestaurantId,
+            },
+            query: to.query,
+            hash: to.hash,
+          }
+        }
+      }
     }
   }
 

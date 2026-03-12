@@ -46,24 +46,23 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/users/{user}', [UserController::class, 'show']);
     Route::patch('/users/{user}', [UserController::class, 'update']);
     Route::patch('/users/{user}/status', [UserController::class, 'updateStatus']);
+    Route::patch('/users/{user}/password', [UserController::class, 'updatePassword']);
     Route::delete('/users/{user}', [UserController::class, 'destroy']);
 });
 
 // Public API endpoints (for viewing menu, etc)
 Route::get('/restaurants', [RestaurantController::class, 'index']);
-Route::get('/restaurants/{restaurant}', [RestaurantController::class, 'show']);
+Route::get('/restaurants/{restaurant}', [RestaurantController::class, 'show'])->whereNumber('restaurant');
 Route::get('/restaurants/{restaurantId}/catalogs', [ProductController::class, 'getCatalogsByRestaurant']);
-Route::get('/products', [ProductController::class, 'index']);
-Route::get('/products/{product}', [ProductController::class, 'show']);
-Route::get('/categories', [CategoryController::class, 'index']);
-Route::get('/categories/{category}', [CategoryController::class, 'show']);
 
 // Protected resource routes (admin only)
 Route::middleware('auth:sanctum')->group(function () {
     // Restaurant management
+    Route::get('/restaurants/stats', [ProductController::class, 'getRestaurantsStats']);
     Route::post('/restaurants', [RestaurantController::class, 'store']);
     Route::put('/restaurants/{restaurant}', [RestaurantController::class, 'update']);
     Route::put('/restaurants/{restaurant}/admins', [RestaurantController::class, 'syncAdmins']);
+    Route::put('/restaurants/{restaurant}/staffs', [RestaurantController::class, 'syncStaffs']);
     Route::delete('/restaurants/{restaurant}', [RestaurantController::class, 'destroy']);
 
     // Catalog management
@@ -81,12 +80,9 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::put('/restaurants/{restaurantId}/catalogs/{catalogId}/sections/{sectionId}/products/{productId}', [ProductController::class, 'updateProduct']);
     Route::delete('/restaurants/{restaurantId}/catalogs/{catalogId}/sections/{sectionId}/products/{productId}', [ProductController::class, 'deleteProduct']);
 
-    // Legacy product management (keep for compatibility)
-    Route::post('/products', [ProductController::class, 'store']);
-    Route::put('/products/{product}', [ProductController::class, 'update']);
-    Route::delete('/products/{product}', [ProductController::class, 'destroy']);
-
     // Category management
+    Route::get('/categories', [CategoryController::class, 'index']);
+    Route::get('/categories/{category}', [CategoryController::class, 'show']);
     Route::post('/categories', [CategoryController::class, 'store']);
     Route::put('/categories/{category}', [CategoryController::class, 'update']);
     Route::delete('/categories/{category}', [CategoryController::class, 'destroy']);
@@ -104,5 +100,6 @@ Route::middleware('auth:sanctum')->group(function () {
 
     Route::post('/orders/{orderId}/payments/stripe', [PaymentController::class, 'createStripePaymentIntent']);
     Route::post('/orders/{orderId}/payments/cash', [PaymentController::class, 'createCashPayment']);
+    Route::post('/orders/{orderId}/payments/test', [PaymentController::class, 'createTestPayment']);
     Route::get('/payments/{payment}', [PaymentController::class, 'show']);
 });

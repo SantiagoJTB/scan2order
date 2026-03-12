@@ -8,15 +8,28 @@
     <div class="checkout-content">
       <div class="checkout-form">
         <div class="section">
-          <h2>Información de envío</h2>
+          <h2>Tipo de consumo</h2>
+          <div class="order-types">
+            <label class="payment-option">
+              <input v-model="formData.orderType" type="radio" value="local" required />
+              <span>Consumir en el local</span>
+            </label>
+            <label class="payment-option">
+              <input v-model="formData.orderType" type="radio" value="takeaway" />
+              <span>Para llevar</span>
+            </label>
+          </div>
+        </div>
+
+        <div class="section">
+          <h2>Datos adicionales</h2>
           <div class="form-group">
             <label for="address">Dirección:</label>
             <input
               v-model="formData.address"
               type="text"
               id="address"
-              placeholder="Calle y número"
-              required
+              placeholder="Referencia opcional"
             />
           </div>
           <div class="form-row">
@@ -26,8 +39,7 @@
                 v-model="formData.city"
                 type="text"
                 id="city"
-                placeholder="Ciudad"
-                required
+                placeholder="Ciudad (opcional)"
               />
             </div>
             <div class="form-group">
@@ -36,8 +48,7 @@
                 v-model="formData.postalcode"
                 type="text"
                 id="postalcode"
-                placeholder="Código postal"
-                required
+                placeholder="Código postal (opcional)"
               />
             </div>
           </div>
@@ -53,6 +64,10 @@
             <label class="payment-option">
               <input v-model="formData.paymentMethod" type="radio" value="cash" />
               <span>Pago en efectivo al recibir</span>
+            </label>
+            <label class="payment-option">
+              <input v-model="formData.paymentMethod" type="radio" value="table" />
+              <span>Pago en mesa</span>
             </label>
           </div>
 
@@ -117,8 +132,8 @@
             <span>${{ (cart.total * 0.1).toFixed(2) }}</span>
           </div>
           <div class="summary-row">
-            <span>Envío:</span>
-            <span>$5.00</span>
+            <span>Servicio:</span>
+            <span>$0.00</span>
           </div>
           <div class="summary-row total">
             <span>Total:</span>
@@ -138,7 +153,7 @@
           <p>Tu pedido ha sido procesado exitosamente.</p>
           <p><strong>Número de pedido:</strong> #{{ orderNumber }}</p>
           <p><strong>Total pagado:</strong> ${{ totalAmount.toFixed(2) }}</p>
-          <p>Recibirás tu pedido en aproximadamente 30-45 minutos.</p>
+          <p>{{ successMessage }}</p>
         </div>
         <div class="modal-footer">
           <button @click="goHome" class="btn-modal">Volver al menú</button>
@@ -169,6 +184,7 @@ const stripeCardElement = ref(null)
 const cardElementRef = ref(null)
 
 const formData = ref({
+  orderType: 'local',
   address: '',
   city: '',
   postalcode: '',
@@ -181,8 +197,15 @@ const stripePublicKeyMissing = computed(() => !stripePublicKey)
 
 const totalAmount = computed(() => {
   const tax = cart.total * 0.1
-  const shipping = 5.0
-  return cart.total + tax + shipping
+  const service = 0
+  return cart.total + tax + service
+})
+
+const successMessage = computed(() => {
+  if (formData.value.orderType === 'takeaway') {
+    return 'Tu pedido estará listo para recoger en aproximadamente 20-30 minutos.'
+  }
+  return 'Tu pedido será preparado para consumir en el local en aproximadamente 20-30 minutos.'
 })
 
 async function processPayment() {
@@ -190,21 +213,13 @@ async function processPayment() {
   error.value = null
 
   try {
-    if (!formData.value.address || !formData.value.city || !formData.value.postalcode) {
-      throw new Error('Completa todos los campos de envío')
-    }
-
-    if (formData.value.paymentMethod === 'card' && !formData.value.cardName) {
-      throw new Error('Completa el nombre en la tarjeta')
-    }
-
     const orderId = await createOrderWithItems()
     orderNumber.value = String(orderId)
 
-    if (formData.value.paymentMethod === 'card' && auth.token) {
-      await startStripePayment(orderId)
-    } else if (formData.value.paymentMethod === 'cash' && auth.token) {
-      await createCashPayment(orderId)
+    // Use test payment endpoint to complete the payment
+    // This works for both card and cash methods
+    if (auth.token) {
+      await createTestPayment(orderId)
     }
 
     showSuccess.value = true
@@ -218,7 +233,7 @@ async function processPayment() {
 
 function goHome() {
   showSuccess.value = false
-  router.push('/menu')
+  router.push('/orders')
 }
 
 async function createOrderWithItems() {
@@ -235,7 +250,12 @@ async function createOrderWithItems() {
     throw new Error('No se pudo determinar el restaurante del pedido')
   }
 
-  const notes = `Entrega: ${formData.value.address}, ${formData.value.city}, ${formData.value.postalcode}`
+  const details = [formData.value.address, formData.value.city, formData.value.postalcode]
+    .filter(Boolean)
+    .join(', ')
+  const notes = details
+    ? `Tipo de consumo: ${formData.value.orderType === 'takeaway' ? 'Para llevar' : 'Consumir en local'}. Referencia: ${details}`
+    : `Tipo de consumo: ${formData.value.orderType === 'takeaway' ? 'Para llevar' : 'Consumir en local'}`
 
   const orderResponse = await fetch('/api/orders', {
     method: 'POST',
@@ -247,7 +267,7 @@ async function createOrderWithItems() {
     body: JSON.stringify({
       restaurant_id: restaurantId,
       user_id: auth.user?.id || null,
-      type: 'delivery',
+      type: formData.value.orderType === 'takeaway' ? 'delivery' : 'local',
       status: 'pending',
       total: totalAmount.value,
       notes
@@ -285,6 +305,29 @@ async function createOrderWithItems() {
 
   localStorage.setItem('checkout_order_id', String(orderId))
   return orderId
+}
+
+async function createTestPayment(orderId) {
+  const response = await fetch(`/api/orders/${orderId}/payments/test`, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${auth.token}`,
+      'Content-Type': 'application/json',
+      'Accept': 'application/json'
+    },
+    body: JSON.stringify({
+      amount: totalAmount.value,
+      currency: 'eur',
+      method: formData.value.paymentMethod
+    })
+  })
+
+  const contentType = response.headers.get('content-type') || ''
+  const data = contentType.includes('application/json') ? await response.json() : null
+
+  if (!response.ok) {
+    throw new Error(data?.message || 'No se pudo procesar el pago')
+  }
 }
 
 async function initStripeElements() {
@@ -506,6 +549,12 @@ onBeforeUnmount(() => {
   flex-direction: column;
   gap: 1rem;
   margin-bottom: 1rem;
+}
+
+.order-types {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
 }
 
 .payment-option {

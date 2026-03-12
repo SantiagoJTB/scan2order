@@ -29,9 +29,10 @@ class UserController extends Controller
             'email' => 'required|string|email|max:255|unique:users',
             'password' => 'required|string|min:6',
             'phone' => 'nullable|string|max:20',
-            'role' => 'required|string|in:admin,caja,cocina,cliente',
+            'role' => 'required|string|in:admin,staff,cliente',
             'assign_to_admin' => 'nullable|boolean',
             'admin_id' => 'nullable|integer|exists:users,id',
+            'staff_password' => 'nullable|string|min:6',
         ]);
 
         // Get role by name
@@ -41,7 +42,7 @@ class UserController extends Controller
         }
 
         // Only superadmin can create admin users
-        // Regular admin can only create caja and cocina
+        // Regular admin can only create staff
         if ($data['role'] === 'admin' && !$user->hasRole('superadmin')) {
             return response()->json(['message' => 'Only superadmin can create admin users'], 403);
         }
@@ -51,11 +52,11 @@ class UserController extends Controller
             return response()->json(['message' => 'Only superadmin can create cliente users'], 403);
         }
 
-        if ($user->hasRole('admin') && !$user->hasRole('superadmin') && !in_array($data['role'], ['caja', 'cocina'])) {
-            return response()->json(['message' => 'Admin can only create caja and cocina users'], 403);
+        if ($user->hasRole('admin') && !$user->hasRole('superadmin') && $data['role'] !== 'staff') {
+            return response()->json(['message' => 'Admin can only create staff users'], 403);
         }
 
-        // When creating admin, also create caja and cocina
+        // Create user
         $createdUsers = [];
         
         if ($data['role'] === 'admin') {
@@ -71,37 +72,25 @@ class UserController extends Controller
             ]);
             $createdUsers[] = $this->formatUser($adminUser);
 
-            // Auto-create caja and cocina users for this admin
-            $cajaRole = Role::where('name', 'caja')->first();
-            $cocinaRole = Role::where('name', 'cocina')->first();
+            // Auto-create staff user for this admin
+            $staffRole = Role::where('name', 'staff')->first();
 
-            if ($cajaRole) {
-                $cajaUser = User::create([
-                    'name' => "{$data['name']} - Caja",
-                    'email' => "caja-{$adminUser->id}@scan2order.local",
-                    'password' => Hash::make('password123'),
-                    'role_id' => $cajaRole->id,
-                    'created_by' => $user->id,
+            if ($staffRole) {
+                $staffPassword = $data['staff_password'] ?? 'password123';
+                $staffUser = User::create([
+                    'name' => "{$data['name']} - Staff",
+                    'email' => "staff-{$adminUser->id}@scan2order.local",
+                    'password' => Hash::make($staffPassword),
+                    'role_id' => $staffRole->id,
+                    'created_by' => $adminUser->id,
                     'status' => 'active',
                 ]);
-                $createdUsers[] = $this->formatUser($cajaUser);
-            }
-
-            if ($cocinaRole) {
-                $cocinaUser = User::create([
-                    'name' => "{$data['name']} - Cocina",
-                    'email' => "cocina-{$adminUser->id}@scan2order.local",
-                    'password' => Hash::make('password123'),
-                    'role_id' => $cocinaRole->id,
-                    'created_by' => $user->id,
-                    'status' => 'active',
-                ]);
-                $createdUsers[] = $this->formatUser($cocinaUser);
+                $createdUsers[] = $this->formatUser($staffUser);
             }
         } else {
             $createdBy = $user->id;
 
-            if ($user->hasRole('superadmin') && in_array($data['role'], ['caja', 'cocina'])) {
+            if ($user->hasRole('superadmin') && $data['role'] === 'staff') {
                 $assignToAdmin = (bool) ($data['assign_to_admin'] ?? false);
 
                 if ($assignToAdmin) {
@@ -120,7 +109,7 @@ class UserController extends Controller
                 }
             }
 
-            // Create caja or cocina single user
+            // Create staff or cliente user
             $newUser = User::create([
                 'name' => $data['name'],
                 'email' => $data['email'],
@@ -230,8 +219,8 @@ class UserController extends Controller
                 return response()->json(['message' => 'Unauthorized'], 403);
             }
 
-            if (!in_array($user->role?->name, ['caja', 'cocina'])) {
-                return response()->json(['message' => 'Admin can only edit caja and cocina users'], 403);
+            if (!in_array($user->role?->name, ['staff'])) {
+                return response()->json(['message' => 'Admin can only edit staff users'], 403);
             }
         }
 
@@ -255,32 +244,54 @@ class UserController extends Controller
 
     /**
      * Delete user.
+     * - Clientes can delete their own account
+     * - Admins can only delete staff users they created
+     * - Only superadmin can delete cliente accounts
+     * - Orders remain in restaurants (user_id set to null via onDelete cascade)
      */
     public function destroy(Request $request, User $user)
     {
         $currentUser = $request->user();
+        $userRole = $user->role?->name;
 
-        if (!$currentUser->hasAnyRole(['superadmin', 'admin'])) {
-            return response()->json(['message' => 'Unauthorized'], 403);
+        // Allow clients to delete their own account
+        if ($currentUser->id === $user->id && $userRole === 'cliente') {
+            $user->delete();
+            return response()->json([
+                'message' => 'Account deleted successfully'
+            ]);
         }
 
+        // Prevent other roles from deleting themselves
         if ($currentUser->id === $user->id) {
             return response()->json(['message' => 'You cannot delete your own account'], 422);
         }
 
+        // Only superadmin and admin can delete other users
+        if (!$currentUser->hasAnyRole(['superadmin', 'admin'])) {
+            return response()->json(['message' => 'Unauthorized'], 403);
+        }
+
+        // Prevent admin from deleting cliente accounts (only superadmin can)
+        if ($currentUser->hasRole('admin') && !$currentUser->hasRole('superadmin') && $userRole === 'cliente') {
+            return response()->json(['message' => 'Only superadmin can delete cliente accounts'], 403);
+        }
+
+        // Admin can only delete staff users they created
         if ($currentUser->hasRole('admin') && !$currentUser->hasRole('superadmin')) {
             if ($user->created_by !== $currentUser->id) {
                 return response()->json(['message' => 'Unauthorized'], 403);
             }
 
-            if (!in_array($user->role?->name, ['caja', 'cocina'])) {
-                return response()->json(['message' => 'Admin can only delete caja and cocina users'], 403);
+            if ($userRole !== 'staff') {
+                return response()->json(['message' => 'Admin can only delete staff users'], 403);
             }
         }
 
         $deletedLinkedAccounts = 0;
 
         DB::transaction(function () use ($user, &$deletedLinkedAccounts) {
+            // If deleting an admin, also delete their created staff accounts
             if ($user->role?->name === 'admin') {
                 $deletedLinkedAccounts = User::where('created_by', $user->id)->delete();
             }
@@ -296,6 +307,32 @@ class UserController extends Controller
         return response()->json([
             'message' => $message,
             'deleted_linked_accounts' => $deletedLinkedAccounts
+        ]);
+    }
+
+    /**
+     * Update user password (superadmin only).
+     */
+    public function updatePassword(Request $request, User $targetUser)
+    {
+        $currentUser = $request->user();
+
+        // Only superadmin can change passwords
+        if (!$currentUser->hasRole('superadmin')) {
+            return response()->json(['message' => 'Unauthorized. Only superadmin can change passwords'], 403);
+        }
+
+        $data = $request->validate([
+            'password' => 'required|string|min:6|confirmed',
+        ]);
+
+        $targetUser->update([
+            'password' => Hash::make($data['password'])
+        ]);
+
+        return response()->json([
+            'message' => 'Password updated successfully',
+            'user' => $this->formatUser($targetUser)
         ]);
     }
 

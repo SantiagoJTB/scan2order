@@ -15,8 +15,7 @@ class RolePermissionSeeder extends Seeder
         // Create roles
         $superadmin = Role::firstOrCreate(['name' => 'superadmin'], ['is_global' => true]);
         $admin = Role::firstOrCreate(['name' => 'admin'], ['is_global' => true]);
-        $caja = Role::firstOrCreate(['name' => 'caja'], ['is_global' => true]);
-        $cocina = Role::firstOrCreate(['name' => 'cocina'], ['is_global' => true]);
+        $staff = Role::firstOrCreate(['name' => 'staff'], ['is_global' => true]);
         $cliente = Role::firstOrCreate(['name' => 'cliente'], ['is_global' => false]);
 
         // Create permissions
@@ -31,12 +30,10 @@ class RolePermissionSeeder extends Seeder
             'manage_tables' => 'Gestionar mesas',
             'view_reports' => 'Ver reportes',
 
-            // Caja permissions
+            // Staff permissions (caja + cocina + menu)
             'manage_payments' => 'Gestionar pagos',
-            'view_orders' => 'Ver órdenes',
-
-            // Cocina permissions
             'manage_orders' => 'Gestionar órdenes',
+            'view_orders' => 'Ver órdenes',
 
             // Cliente permissions
             'place_order' => 'Realizar orden',
@@ -63,19 +60,14 @@ class RolePermissionSeeder extends Seeder
         ])->get();
         $admin->permissions()->sync($adminPerms);
 
-        // Caja
-        $cajaPerms = Permission::whereIn('name', [
+        // Staff (combines caja + cocina + menu management)
+        $staffPerms = Permission::whereIn('name', [
             'manage_payments',
-            'view_orders',
-        ])->get();
-        $caja->permissions()->sync($cajaPerms);
-
-        // Cocina
-        $cocinaPerms = Permission::whereIn('name', [
             'manage_orders',
             'view_orders',
+            'manage_products',
         ])->get();
-        $cocina->permissions()->sync($cocinaPerms);
+        $staff->permissions()->sync($staffPerms);
 
         // Cliente
         $clientePerms = Permission::whereIn('name', [

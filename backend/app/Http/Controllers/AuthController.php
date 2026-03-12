@@ -32,6 +32,7 @@ class AuthController extends Controller
             'status' => 'active',
         ]);
 
+            $user->load('role');
         $token = $user->createToken('api-token')->plainTextToken;
         return response()->json([
             'user' => $this->userWithRole($user),
@@ -51,6 +52,7 @@ class AuthController extends Controller
         }
 
         $user = Auth::user();
+            $user->load('role');
         
         // Verificar estado
         if ($user->status !== 'active') {
@@ -73,15 +75,18 @@ class AuthController extends Controller
 
     public function me(Request $request)
     {
-        return response()->json($this->userWithRole($request->user()));
+           $user = $request->user();
+           $user->load('role');
+           return response()->json($this->userWithRole($user));
     }
 
     /**
      * Format user with role and permissions.
+     * For staff users, include the linked restaurant ID.
      */
     private function userWithRole($user)
     {
-        return [
+        $userArray = [
             'id' => $user->id,
             'name' => $user->name,
             'email' => $user->email,
@@ -93,5 +98,15 @@ class AuthController extends Controller
             ] : null,
             'permissions' => $user->permissions()->pluck('name'),
         ];
+
+        // For staff users, include the linked restaurant ID
+        if ($user->role && $user->role->name === 'staff') {
+            // Staff must have exactly one restaurant assigned
+            $restaurant = $user->restaurants()->first();
+            $userArray['restaurant_id'] = $restaurant?->id ?? null;
+            $userArray['restaurant_name'] = $restaurant?->name ?? null;
+        }
+
+        return $userArray;
     }
 }

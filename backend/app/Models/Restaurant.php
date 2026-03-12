@@ -55,4 +55,13 @@ class Restaurant extends Model
                 $query->where('name', 'admin');
             });
     }
+
+    public function staffs()
+    {
+        return $this->belongsToMany(User::class, 'user_restaurant')
+            ->withPivot('role_id')
+            ->whereHas('role', function ($query) {
+                $query->where('name', 'staff');
+            });
+    }
 }

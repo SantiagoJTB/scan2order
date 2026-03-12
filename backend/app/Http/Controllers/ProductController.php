@@ -8,12 +8,74 @@ use App\Models\Catalog;
 use App\Models\Restaurant;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Storage;
 
 class ProductController extends Controller
 {
+    public function getRestaurantsStats()
+    {
+        $user = Auth::user();
+        
+        if (!$user) {
+            abort(401, 'No autenticado');
+        }
+        
+        // Ensure role is loaded
+        if (!$user->relationLoaded('role')) {
+            $user->load('role');
+        }
+
+        // Get restaurants based on role
+        if ($user->hasRole('superadmin')) {
+            $restaurants = Restaurant::with(['catalogs.sections.products'])->get();
+        } elseif ($user->hasAnyRole(['admin', 'staff'])) {
+            $restaurantIds = $this->managedRestaurantIds($user);
+            $restaurants = Restaurant::with(['catalogs.sections.products'])
+                ->whereIn('id', $restaurantIds)
+                ->get();
+        } else {
+            abort(403, 'No autorizado');
+        }
+
+        // Calculate stats for each restaurant
+        $stats = $restaurants->map(function ($restaurant) {
+            $catalogs = $restaurant->catalogs;
+            $totalProducts = 0;
+            $productsPerMenu = [];
+
+            foreach ($catalogs as $catalog) {
+                $catalogProducts = 0;
+                foreach ($catalog->sections as $section) {
+                    $catalogProducts += $section->products->count();
+                }
+                $productsPerMenu[] = [
+                    'menu_name' => $catalog->name,
+                    'products_count' => $catalogProducts
+                ];
+                $totalProducts += $catalogProducts;
+            }
+
+            return [
+                'id' => $restaurant->id,
+                'name' => $restaurant->name,
+                'address' => $restaurant->address ?? '',
+                'phone' => $restaurant->phone ?? '',
+                'menus_count' => $catalogs->count(),
+                'total_products' => $totalProducts,
+                'products_per_menu' => $productsPerMenu
+            ];
+        });
+
+        return response()->json($stats);
+    }
+
     protected function authorizeRestaurant($restaurantId)
     {
         $user = Auth::user();
+        
+        if (!$user) {
+            abort(401, 'No autenticado');
+        }
         
         // Ensure role is loaded
         if (!$user->relationLoaded('role')) {
@@ -30,8 +92,8 @@ class ProductController extends Controller
             return $restaurant;
         }
 
-        if ($user->hasRole('admin')) {
-            if (!$user->restaurants()->where('restaurant_id', $restaurantId)->exists()) {
+        if ($user->hasAnyRole(['admin', 'staff'])) {
+            if (!$this->canAccessRestaurant($user, (int) $restaurantId)) {
                 abort(403, 'No tienes permiso para acceder a este restaurante');
             }
             return $restaurant;
@@ -42,16 +104,40 @@ class ProductController extends Controller
 
     public function getCatalogsByRestaurant($restaurantId)
     {
-        $restaurant = $this->authorizeRestaurant($restaurantId);
+        $user = auth('sanctum')->user();
+
+        $restaurant = Restaurant::find($restaurantId);
+        
+        if (!$restaurant) {
+            return response()->json(['error' => 'Restaurante no encontrado'], 404);
+        }
+
+        if ($user) {
+            if (!$user->relationLoaded('role')) {
+                $user->load('role');
+            }
+
+            if ($user->hasAnyRole(['admin', 'staff']) && !$this->canAccessRestaurant($user, (int) $restaurantId)) {
+                return response()->json(['message' => 'Unauthorized'], 403);
+            }
+
+            if ($user->hasRole('cliente') && !$restaurant->active) {
+                return response()->json(['message' => 'Restaurante no disponible'], 404);
+            }
+        } elseif (!$restaurant->active) {
+            return response()->json(['message' => 'Restaurante no disponible'], 404);
+        }
         
         $catalogs = $restaurant->catalogs()
             ->with(['sections' => function ($query) {
-                $query->orderBy('order')
+                $query->where('active', true)
+                    ->orderBy('order')
                     ->with(['products' => function ($q) {
                         $q->where('active', true)->orderBy('name');
                     }]);
             }])
             ->where('active', true)
+            ->orderBy('order')
             ->get();
 
         return response()->json($catalogs);
@@ -193,11 +279,22 @@ class ProductController extends Controller
             'description' => 'nullable|string',
             'price' => 'required|numeric|min:0',
             'active' => 'boolean',
+            'image' => 'nullable|image|mimes:jpeg,png,jpg,gif,webp|max:2048',
         ]);
 
-        $product = $section->products()->create(array_merge($validated, [
+        $productData = array_merge($validated, [
             'restaurant_id' => $restaurant->id,
-        ]));
+        ]);
+
+        // Handle image upload
+        if ($request->hasFile('image')) {
+            $image = $request->file('image');
+            $imageName = time() . '_' . uniqid() . '.' . $image->getClientOriginalExtension();
+            $image->storeAs('public/products', $imageName);
+            $productData['image'] = 'products/' . $imageName;
+        }
+
+        $product = $section->products()->create($productData);
 
         return response()->json($product, 201);
     }
@@ -226,7 +323,27 @@ class ProductController extends Controller
             'description' => 'nullable|string',
             'price' => 'numeric|min:0',
             'active' => 'boolean',
+            'image' => 'nullable|image|mimes:jpeg,png,jpg,gif,webp|max:2048',
+            'remove_image' => 'boolean',
         ]);
+
+        // Handle image removal
+        if ($request->input('remove_image') && $product->image) {
+            Storage::delete('public/' . $product->image);
+            $validated['image'] = null;
+        }
+
+        // Handle new image upload
+        if ($request->hasFile('image')) {
+            // Delete old image if exists
+            if ($product->image) {
+                Storage::delete('public/' . $product->image);
+            }
+            $image = $request->file('image');
+            $imageName = time() . '_' . uniqid() . '.' . $image->getClientOriginalExtension();
+            $image->storeAs('public/products', $imageName);
+            $validated['image'] = 'products/' . $imageName;
+        }
 
         $product->update($validated);
 

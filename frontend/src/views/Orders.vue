@@ -22,6 +22,7 @@
         </div>
         <div class="order-details">
           <p><strong>Total:</strong> ${{ order.total || 0 }}</p>
+          <p><strong>Tipo:</strong> {{ getOrderTypeLabel(order.type) }}</p>
           <p><strong>Fecha:</strong> {{ formatDate(order.created_at) }}</p>
         </div>
         <div class="order-actions">
@@ -56,6 +57,14 @@ const getStatusLabel = (status) => {
     'cancelled': 'Cancelado'
   }
   return labels[status] || status
+}
+
+const getOrderTypeLabel = (type) => {
+  const labels = {
+    'local': 'Consumir en local',
+    'delivery': 'Para llevar'
+  }
+  return labels[type] || type || '-'
 }
 
 const formatDate = (date) => {
