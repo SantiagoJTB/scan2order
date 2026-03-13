@@ -47,7 +47,7 @@
                   ✏️
                 </button>
                 <button
-                  v-if="auth.hasRole('superadmin')"
+                  v-if="canChangePasswordUser(group.admin)"
                   @click="openPasswordModal(group.admin)"
                   class="btn-action"
                   title="Cambiar contraseña"
@@ -101,7 +101,7 @@
                         ✏️
                       </button>
                       <button
-                        v-if="auth.hasRole('superadmin')"
+                        v-if="canChangePasswordUser(member)"
                         @click="openPasswordModal(member)"
                         class="btn-action-small"
                         title="Cambiar contraseña"
@@ -164,7 +164,7 @@
                   ✏️
                 </button>
                 <button
-                  v-if="auth.hasRole('superadmin')"
+                  v-if="canChangePasswordUser(member)"
                   @click="openPasswordModal(member)"
                   class="btn-action-small"
                   title="Cambiar contraseña"
@@ -222,7 +222,7 @@
                   ✏️
                 </button>
                 <button
-                  v-if="auth.hasRole('superadmin')"
+                  v-if="canChangePasswordUser(client)"
                   @click="openPasswordModal(client)"
                   class="btn-action"
                   title="Cambiar contraseña"
@@ -287,6 +287,14 @@
               ✏️
             </button>
             <button 
+              v-if="canChangePasswordUser(user)"
+              @click="openPasswordModal(user)"
+              class="btn-action"
+              title="Cambiar contraseña"
+            >
+              🔑
+            </button>
+            <button
               v-if="canChangeStatus(user)"
               @click="changeStatus(user)" 
               class="btn-action"
@@ -346,6 +354,17 @@
               v-model="newUser.password"
               type="password"
               id="password"
+              placeholder="••••••••"
+              required
+            />
+          </div>
+
+          <div class="form-group">
+            <label for="password-confirmation">Confirmar contraseña:</label>
+            <input
+              v-model="newUser.passwordConfirmation"
+              type="password"
+              id="password-confirmation"
               placeholder="••••••••"
               required
             />
@@ -598,6 +617,7 @@ const newUser = ref({
   name: '',
   email: '',
   password: '',
+  passwordConfirmation: '',
   staffPassword: '',
   phone: '',
   role: '',
@@ -684,6 +704,20 @@ function canChangeStatus(user) {
   return true
 }
 
+function canChangePasswordUser(user) {
+  if (!user || user.id === auth.user?.id) return false
+
+  if (auth.hasRole('superadmin')) {
+    return true
+  }
+
+  if (auth.hasRole('admin') && !auth.hasRole('superadmin')) {
+    return user.role?.name === 'staff' && user.created_by === auth.user?.id
+  }
+
+  return false
+}
+
 function showToast(message, type = 'success') {
   if (toastTimer) {
     clearTimeout(toastTimer)
@@ -752,6 +786,7 @@ async function createUser() {
       name: newUser.value.name,
       email: newUser.value.email,
       password: newUser.value.password,
+      password_confirmation: newUser.value.passwordConfirmation,
       phone: newUser.value.phone,
       role: newUser.value.role
     }
@@ -800,7 +835,7 @@ async function createUser() {
 
     // Close modal and reset form
     showCreateForm.value = false
-    newUser.value = { name: '', email: '', password: '', staffPassword: '', phone: '', role: '', assignToAdmin: true, adminId: '' }
+    newUser.value = { name: '', email: '', password: '', passwordConfirmation: '', staffPassword: '', phone: '', role: '', assignToAdmin: true, adminId: '' }
     
     // Refresh users list
     await fetchUsers()

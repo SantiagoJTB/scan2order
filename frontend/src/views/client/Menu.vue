@@ -66,7 +66,8 @@
             <div 
               v-for="product in filteredCurrentProducts" 
               :key="product.id" 
-              :class="['product-card', { compact: !showImages }]"
+              :class="['product-card', { compact: !showImages, expanded: isProductExpanded(product.id) }]"
+              @click="toggleProductDescription(product.id, Boolean(product.description))"
             >
               <div v-if="showImages" class="product-image">
                 <img v-if="product.image" :src="`/storage/${product.image}`" :alt="product.name" />
@@ -74,10 +75,15 @@
               </div>
               <div :class="['product-info', { compact: !showImages }]">
                 <h3>{{ product.name }}</h3>
-                <p v-if="product.description" class="description">{{ product.description }}</p>
+                <p
+                  v-if="product.description"
+                  :class="['description', { expanded: isProductExpanded(product.id) }]"
+                >
+                  {{ product.description }}
+                </p>
                 <div class="product-footer">
                   <span class="price">${{ product.price.toFixed(2) }}</span>
-                  <button @click="addToCart(product)" class="btn-add">
+                  <button @click.stop="addToCart(product)" class="btn-add">
                     Agregar
                   </button>
                 </div>
@@ -122,6 +128,7 @@ const restaurant = ref(null)
 const searchText = ref('')
 const selectedSection = ref(null)
 const showImages = ref(false)
+const expandedProductIds = ref(new Set())
 
 // Flatten all sections from all catalogs
 const allSections = computed(() => {
@@ -155,6 +162,23 @@ const filteredCurrentProducts = computed(() => {
 
 function selectSection(section) {
   selectedSection.value = section
+  expandedProductIds.value = new Set()
+}
+
+function isProductExpanded(productId) {
+  return expandedProductIds.value.has(productId)
+}
+
+function toggleProductDescription(productId, hasDescription) {
+  if (!hasDescription) return
+
+  const next = new Set(expandedProductIds.value)
+  if (next.has(productId)) {
+    next.delete(productId)
+  } else {
+    next.add(productId)
+  }
+  expandedProductIds.value = next
 }
 
 function filterProducts(products) {
@@ -532,6 +556,10 @@ onMounted(() => {
   box-shadow: 0 12px 40px rgba(102, 126, 234, 0.2);
 }
 
+.product-card.expanded {
+  box-shadow: 0 10px 30px rgba(102, 126, 234, 0.18);
+}
+
 .product-image {
   height: 200px;
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
@@ -619,6 +647,17 @@ onMounted(() => {
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
+}
+
+.description.expanded {
+  display: block;
+  -webkit-line-clamp: unset;
+  -webkit-box-orient: initial;
+  overflow: visible;
+}
+
+.product-info.compact .description.expanded {
+  -webkit-line-clamp: unset;
 }
 
 .product-footer {

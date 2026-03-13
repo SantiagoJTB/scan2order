@@ -481,6 +481,8 @@ El router valida en cada navegación:
 
 ## Datos de Prueba
 
+> Credenciales actualizadas y ubicación del superadmin: ver `docs/usuarios-prueba.md`
+
 ### Cuentas Incluidas
 
 | Rol | Email | Clave | Propósito |

@@ -7,9 +7,11 @@ use App\Models\OrderItem;
 use App\Models\Payment;
 use App\Models\Product;
 use App\Models\Restaurant;
+use App\Models\Role;
 use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Database\Seeder;
+use Illuminate\Support\Facades\Hash;
 
 class OperationalTestDataSeeder extends Seeder
 {
@@ -24,18 +26,60 @@ class OperationalTestDataSeeder extends Seeder
             return;
         }
 
-        $client = User::whereHas('role', function ($query) {
-            $query->where('name', 'cliente');
-        })->first();
+        $superadmin = User::where('email', 'superadmin@scan2order.local')->first();
+        $adminRoleId = Role::where('name', 'admin')->value('id');
+        $staffRoleId = Role::where('name', 'staff')->value('id');
+        $clienteRoleId = Role::where('name', 'cliente')->value('id');
 
-        if (!$client) {
-            $client = User::create([
-                'name' => 'Cliente Demo',
-                'email' => 'cliente.demo@scan2order.local',
-                'password' => bcrypt('cliente123'),
-                'phone' => '600000000',
-                'role_id' => \App\Models\Role::where('name', 'cliente')->value('id'),
+        if (!$adminRoleId || !$staffRoleId || !$clienteRoleId) {
+            $this->command->warn('Missing roles. Run RolePermissionSeeder first.');
+            return;
+        }
+
+        $adminUser = User::updateOrCreate(
+            ['email' => 'admin.demo@scan2order.local'],
+            [
+                'name' => 'Admin Demo',
+                'password' => Hash::make('admin123'),
+                'phone' => '611111111',
+                'role_id' => $adminRoleId,
                 'status' => 'active',
+                'created_by' => $superadmin?->id,
+            ]
+        );
+
+        $staffUser = User::updateOrCreate(
+            ['email' => 'staff.demo@scan2order.local'],
+            [
+                'name' => 'Staff Demo',
+                'password' => Hash::make('staff123'),
+                'phone' => '622222222',
+                'role_id' => $staffRoleId,
+                'status' => 'active',
+                'created_by' => $superadmin?->id,
+            ]
+        );
+
+        $client = User::updateOrCreate(
+            ['email' => 'cliente.demo@scan2order.local'],
+            [
+                'name' => 'Cliente Demo',
+                'password' => Hash::make('cliente123'),
+                'phone' => '633333333',
+                'role_id' => $clienteRoleId,
+                'status' => 'active',
+                'created_by' => $superadmin?->id,
+            ]
+        );
+
+        $primaryRestaurant = $restaurants->first();
+        if ($primaryRestaurant) {
+            $adminUser->restaurants()->syncWithoutDetaching([
+                $primaryRestaurant->id => ['role_id' => $adminRoleId],
+            ]);
+
+            $staffUser->restaurants()->syncWithoutDetaching([
+                $primaryRestaurant->id => ['role_id' => $staffRoleId],
             ]);
         }
 
@@ -129,5 +173,13 @@ class OperationalTestDataSeeder extends Seeder
         $this->command->info("- {$createdOrders} orders created");
         $this->command->info("- {$createdItems} order items created");
         $this->command->info("- {$createdPayments} payments created");
+        $this->command->info('Demo login users ready:');
+        $this->command->info('- Superadmin: superadmin@scan2order.local / superadmin123');
+        $this->command->info('- Admin: admin.demo@scan2order.local / admin123');
+        $this->command->info('- Staff: staff.demo@scan2order.local / staff123');
+        $this->command->info('- Cliente: cliente.demo@scan2order.local / cliente123');
+        if ($primaryRestaurant) {
+            $this->command->info("- Admin/Staff assigned restaurant: {$primaryRestaurant->name} (#{$primaryRestaurant->id})");
+        }
     }
 }

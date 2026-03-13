@@ -8,6 +8,27 @@ use Illuminate\Http\Request;
 
 class OrderController extends Controller
 {
+    private function resolveServiceMode(array $data, ?Order $order = null): string
+    {
+        $incoming = isset($data['service_mode']) ? (string) $data['service_mode'] : null;
+        if (in_array($incoming, ['local', 'takeaway', 'pickup'], true)) {
+            return $incoming;
+        }
+
+        $baseType = (string) ($data['type'] ?? $order?->type ?? 'local');
+        return $baseType === 'local' ? 'local' : 'takeaway';
+    }
+
+    private function restaurantSupportsMode(Restaurant $restaurant, string $serviceMode): bool
+    {
+        return match ($serviceMode) {
+            'local' => (bool) $restaurant->service_local_enabled,
+            'takeaway' => (bool) $restaurant->service_takeaway_enabled,
+            'pickup' => (bool) $restaurant->service_pickup_enabled,
+            default => false,
+        };
+    }
+
     public function index(Request $request)
     {
         $user = $request->user();
@@ -52,10 +73,29 @@ class OrderController extends Controller
             'user_id' => 'nullable|exists:users,id',
             'table_id' => 'nullable|exists:tables,id',
             'type' => 'required|in:local,delivery',
+            'service_mode' => 'nullable|in:local,takeaway,pickup',
             'status' => 'required|string',
             'total' => 'numeric',
             'notes' => 'nullable|string',
+            'delivery_address' => 'nullable|string|max:500',
         ]);
+
+        $restaurant = Restaurant::findOrFail((int) $data['restaurant_id']);
+        $serviceMode = $this->resolveServiceMode($data);
+
+        if (!$this->restaurantSupportsMode($restaurant, $serviceMode)) {
+            return response()->json(['message' => 'El restaurante no ofrece esta modalidad de pedido'], 422);
+        }
+
+        $data['type'] = $serviceMode === 'local' ? 'local' : 'delivery';
+
+        if ($serviceMode === 'takeaway' && trim((string) ($data['delivery_address'] ?? '')) === '') {
+            return response()->json(['message' => 'Delivery address is required for takeaway orders'], 422);
+        }
+
+        if ($serviceMode !== 'takeaway') {
+            $data['delivery_address'] = null;
+        }
 
         if ($user->hasRole('cliente')) {
             $isActiveRestaurant = Restaurant::where('id', $data['restaurant_id'])
@@ -130,10 +170,40 @@ class OrderController extends Controller
             'user_id' => 'nullable|exists:users,id',
             'table_id' => 'nullable|exists:tables,id',
             'type' => 'sometimes|required|in:local,delivery',
+            'service_mode' => 'sometimes|nullable|in:local,takeaway,pickup',
             'status' => 'sometimes|required|string',
             'total' => 'numeric',
             'notes' => 'nullable|string',
+            'delivery_address' => 'sometimes|nullable|string|max:500',
         ]);
+
+        $resultingMode = $this->resolveServiceMode($data, $order);
+        $resultingType = $resultingMode === 'local' ? 'local' : 'delivery';
+        $resultingAddress = array_key_exists('delivery_address', $data)
+            ? (string) ($data['delivery_address'] ?? '')
+            : (string) ($order->delivery_address ?? '');
+
+        $restaurant = isset($data['restaurant_id'])
+            ? Restaurant::findOrFail((int) $data['restaurant_id'])
+            : $order->restaurant;
+
+        if (!$restaurant || !$this->restaurantSupportsMode($restaurant, $resultingMode)) {
+            return response()->json(['message' => 'El restaurante no ofrece esta modalidad de pedido'], 422);
+        }
+
+        $data['type'] = $resultingType;
+
+        if ($resultingMode === 'takeaway' && trim($resultingAddress) === '') {
+            return response()->json(['message' => 'Delivery address is required for takeaway orders'], 422);
+        }
+
+        if ($resultingType === 'local' && !array_key_exists('delivery_address', $data)) {
+            $data['delivery_address'] = null;
+        }
+
+        if ($resultingMode !== 'takeaway' && !array_key_exists('delivery_address', $data)) {
+            $data['delivery_address'] = null;
+        }
 
         if (isset($data['restaurant_id']) && $user->hasAnyRole(['admin', 'staff'])) {
             if (!$this->canAccessRestaurant($user, (int) $data['restaurant_id'])) {

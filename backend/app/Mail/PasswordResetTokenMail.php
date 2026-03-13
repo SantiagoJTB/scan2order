@@ -1,0 +1,41 @@
+<?php
+
+namespace App\Mail;
+
+use Illuminate\Bus\Queueable;
+use Illuminate\Contracts\Queue\ShouldQueue;
+use Illuminate\Mail\Mailable;
+use Illuminate\Mail\Mailables\Content;
+use Illuminate\Mail\Mailables\Envelope;
+use Illuminate\Queue\SerializesModels;
+
+class PasswordResetTokenMail extends Mailable implements ShouldQueue
+{
+    use Queueable, SerializesModels;
+
+    public function __construct(
+        public string $token,
+        public string $email,
+        public int $minutes
+    ) {
+    }
+
+    public function envelope(): Envelope
+    {
+        return new Envelope(
+            subject: 'Recuperación de contraseña Scan2Order',
+        );
+    }
+
+    public function content(): Content
+    {
+        return new Content(
+            view: 'emails.password_reset_token',
+            with: [
+                'token' => $this->token,
+                'email' => $this->email,
+                'minutes' => $this->minutes,
+            ],
+        );
+    }
+}

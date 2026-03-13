@@ -141,7 +141,7 @@ test('flujo de pedido en cocina y caja registra eventos clave', async ({ page })
   await page.goto(`/caja/${restaurantId}`)
   await expect(page.getByText('Orden #501')).toBeVisible()
 
-  await page.getByRole('button', { name: 'Marcar como cobrada' }).click()
+  await page.getByRole('button', { name: 'Efectivo' }).click()
   await expect(page.getByText('No hay órdenes pendientes de pago en este momento.')).toBeVisible()
 
   await page.getByRole('button', { name: '📋 Ver historial del día' }).click()

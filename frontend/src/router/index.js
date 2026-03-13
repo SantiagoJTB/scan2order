@@ -19,6 +19,7 @@ import AdminRestaurants from '../views/admin/Restaurants.vue'
 import AdminProducts from '../views/admin/Products.vue'
 import AdminUsers from '../views/admin/Users.vue'
 import AdminReports from '../views/admin/Reports.vue'
+import AdminSecurity from '../views/admin/Security.vue'
 import RestaurantOperations from '../views/admin/RestaurantOperations.vue'
 
 // Staff views
@@ -118,6 +119,12 @@ const routes = [
     name: 'AdminReports',
     component: AdminReports,
     meta: { requiresAuth: true, roles: ['admin', 'superadmin'] }
+  },
+  {
+    path: '/admin/security',
+    name: 'AdminSecurity',
+    component: AdminSecurity,
+    meta: { requiresAuth: true, roles: ['superadmin'] }
   },
   {
     path: '/admin/restaurants/:restaurantId/operations',

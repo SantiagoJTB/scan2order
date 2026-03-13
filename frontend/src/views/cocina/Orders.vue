@@ -49,6 +49,7 @@
               {{ order.restaurant?.name || `#${order.restaurant_id}` }}
             </p>
             <p class="order-meta"><strong>Hora:</strong> {{ formatDate(order.created_at) }}</p>
+            <p v-if="order.type === 'delivery' && order.delivery_address" class="order-meta"><strong>Dirección:</strong> {{ order.delivery_address }}</p>
             <p class="order-meta"><strong>Notas:</strong> {{ order.notes || 'Sin notas' }}</p>
 
             <ul v-if="order.order_items?.length" class="items-list">

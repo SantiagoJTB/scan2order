@@ -12,6 +12,25 @@ use Illuminate\Support\Facades\Storage;
 
 class ProductController extends Controller
 {
+    private const STAFF_HIDE_PERMISSION = 'hide_products_from_menu';
+
+    private function strictStaffRestaurantIds($user): array
+    {
+        return $user->restaurants()->pluck('restaurants.id')->map(fn ($id) => (int) $id)->all();
+    }
+
+    private function ensureStaffCanManageRestaurant($user, int $restaurantId): void
+    {
+        if (!$user->hasRole('staff')) {
+            return;
+        }
+
+        $staffRestaurantIds = $this->strictStaffRestaurantIds($user);
+        if (!in_array($restaurantId, $staffRestaurantIds, true)) {
+            abort(403, 'Staff solo puede gestionar el menú de su restaurante asignado');
+        }
+    }
+
     public function getRestaurantsStats()
     {
         $user = Auth::user();
@@ -28,8 +47,13 @@ class ProductController extends Controller
         // Get restaurants based on role
         if ($user->hasRole('superadmin')) {
             $restaurants = Restaurant::with(['catalogs.sections.products'])->get();
-        } elseif ($user->hasAnyRole(['admin', 'staff'])) {
+        } elseif ($user->hasRole('admin')) {
             $restaurantIds = $this->managedRestaurantIds($user);
+            $restaurants = Restaurant::with(['catalogs.sections.products'])
+                ->whereIn('id', $restaurantIds)
+                ->get();
+        } elseif ($user->hasRole('staff')) {
+            $restaurantIds = $this->strictStaffRestaurantIds($user);
             $restaurants = Restaurant::with(['catalogs.sections.products'])
                 ->whereIn('id', $restaurantIds)
                 ->get();
@@ -96,6 +120,9 @@ class ProductController extends Controller
             if (!$this->canAccessRestaurant($user, (int) $restaurantId)) {
                 abort(403, 'No tienes permiso para acceder a este restaurante');
             }
+
+            $this->ensureStaffCanManageRestaurant($user, (int) $restaurantId);
+
             return $restaurant;
         }
 
@@ -121,6 +148,13 @@ class ProductController extends Controller
                 return response()->json(['message' => 'Unauthorized'], 403);
             }
 
+            if ($user->hasRole('staff')) {
+                $staffRestaurantIds = $this->strictStaffRestaurantIds($user);
+                if (!in_array((int) $restaurantId, $staffRestaurantIds, true)) {
+                    return response()->json(['message' => 'Staff solo puede gestionar el menú de su restaurante asignado'], 403);
+                }
+            }
+
             if ($user->hasRole('cliente') && !$restaurant->active) {
                 return response()->json(['message' => 'Restaurante no disponible'], 404);
             }
@@ -128,23 +162,41 @@ class ProductController extends Controller
             return response()->json(['message' => 'Restaurante no disponible'], 404);
         }
         
-        $catalogs = $restaurant->catalogs()
-            ->with(['sections' => function ($query) {
-                $query->where('active', true)
-                    ->orderBy('order')
-                    ->with(['products' => function ($q) {
-                        $q->where('active', true)->orderBy('name');
-                    }]);
-            }])
-            ->where('active', true)
-            ->orderBy('order')
-            ->get();
+        $isManagementView = $user && $user->hasAnyRole(['superadmin', 'admin', 'staff']);
+
+        $catalogsQuery = $restaurant->catalogs()->orderBy('order');
+
+        $catalogsQuery->with(['sections' => function ($query) use ($isManagementView) {
+            if (!$isManagementView) {
+                $query->where('active', true);
+            }
+
+            $query->orderBy('order')
+                ->with(['products' => function ($q) use ($isManagementView) {
+                    if (!$isManagementView) {
+                        $q->where('active', true);
+                    }
+
+                    $q->orderBy('name');
+                }]);
+        }]);
+
+        if (!$isManagementView) {
+            $catalogsQuery->where('active', true);
+        }
+
+        $catalogs = $catalogsQuery->get();
 
         return response()->json($catalogs);
     }
 
     public function storeCatalog(Request $request, $restaurantId)
     {
+        $user = Auth::user();
+        if ($user && $user->hasRole('staff')) {
+            return response()->json(['message' => 'Staff no puede crear catálogos'], 403);
+        }
+
         $restaurant = $this->authorizeRestaurant($restaurantId);
 
         $validated = $request->validate([
@@ -161,6 +213,11 @@ class ProductController extends Controller
 
     public function updateCatalog(Request $request, $restaurantId, $catalogId)
     {
+        $user = Auth::user();
+        if ($user && $user->hasRole('staff')) {
+            return response()->json(['message' => 'Staff no puede editar catálogos'], 403);
+        }
+
         $restaurant = $this->authorizeRestaurant($restaurantId);
         
         $catalog = $restaurant->catalogs()->find($catalogId);
@@ -182,6 +239,11 @@ class ProductController extends Controller
 
     public function deleteCatalog($restaurantId, $catalogId)
     {
+        $user = Auth::user();
+        if ($user && $user->hasRole('staff')) {
+            return response()->json(['message' => 'Staff no puede eliminar catálogos'], 403);
+        }
+
         $restaurant = $this->authorizeRestaurant($restaurantId);
         
         $catalog = $restaurant->catalogs()->find($catalogId);
@@ -196,6 +258,11 @@ class ProductController extends Controller
 
     public function storeSection(Request $request, $restaurantId, $catalogId)
     {
+        $user = Auth::user();
+        if ($user && $user->hasRole('staff')) {
+            return response()->json(['message' => 'Staff no puede crear secciones'], 403);
+        }
+
         $restaurant = $this->authorizeRestaurant($restaurantId);
         
         $catalog = $restaurant->catalogs()->find($catalogId);
@@ -217,6 +284,11 @@ class ProductController extends Controller
 
     public function updateSection(Request $request, $restaurantId, $catalogId, $sectionId)
     {
+        $user = Auth::user();
+        if ($user && $user->hasRole('staff')) {
+            return response()->json(['message' => 'Staff no puede editar secciones'], 403);
+        }
+
         $restaurant = $this->authorizeRestaurant($restaurantId);
         
         $catalog = $restaurant->catalogs()->find($catalogId);
@@ -243,6 +315,11 @@ class ProductController extends Controller
 
     public function deleteSection($restaurantId, $catalogId, $sectionId)
     {
+        $user = Auth::user();
+        if ($user && $user->hasRole('staff')) {
+            return response()->json(['message' => 'Staff no puede eliminar secciones'], 403);
+        }
+
         $restaurant = $this->authorizeRestaurant($restaurantId);
         
         $catalog = $restaurant->catalogs()->find($catalogId);
@@ -262,6 +339,11 @@ class ProductController extends Controller
 
     public function storeProduct(Request $request, $restaurantId, $catalogId, $sectionId)
     {
+        $user = Auth::user();
+        if ($user && $user->hasRole('staff')) {
+            return response()->json(['message' => 'Staff no puede crear productos'], 403);
+        }
+
         $restaurant = $this->authorizeRestaurant($restaurantId);
         
         $catalog = $restaurant->catalogs()->find($catalogId);
@@ -301,6 +383,7 @@ class ProductController extends Controller
 
     public function updateProduct(Request $request, $restaurantId, $catalogId, $sectionId, $productId)
     {
+        $user = Auth::user();
         $restaurant = $this->authorizeRestaurant($restaurantId);
         
         $catalog = $restaurant->catalogs()->find($catalogId);
@@ -316,6 +399,22 @@ class ProductController extends Controller
         $product = $section->products()->find($productId);
         if (!$product) {
             return response()->json(['error' => 'Producto no encontrado'], 404);
+        }
+
+        if ($user && $user->hasRole('staff')) {
+            if (!$user->hasPermission(self::STAFF_HIDE_PERMISSION)) {
+                return response()->json(['message' => 'Staff no autorizado para ocultar productos'], 403);
+            }
+
+            $validated = $request->validate([
+                'active' => 'required|boolean',
+            ]);
+
+            $product->update([
+                'active' => (bool) $validated['active'],
+            ]);
+
+            return response()->json($product);
         }
 
         $validated = $request->validate([
@@ -352,6 +451,11 @@ class ProductController extends Controller
 
     public function deleteProduct($restaurantId, $catalogId, $sectionId, $productId)
     {
+        $user = Auth::user();
+        if ($user && $user->hasRole('staff')) {
+            return response()->json(['message' => 'Staff no puede eliminar productos'], 403);
+        }
+
         $restaurant = $this->authorizeRestaurant($restaurantId);
         
         $catalog = $restaurant->catalogs()->find($catalogId);

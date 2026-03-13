@@ -8,12 +8,12 @@ on:
   workflow_dispatch:
     inputs:
       run_e2e_real:
-        description: 'Run real backend E2E flow (docker + backend persistence)'
+        description: 'Run real backend E2E flows in CI runner (NOT production)'
         required: false
         default: false
         type: boolean
   schedule:
-    - cron: '0 3 * * *'
+    - cron: '0 3 * * 1'
 
 jobs:
   unit:
@@ -91,6 +91,11 @@ jobs:
       - name: Start docker services
         run: docker compose up -d
 
+      - name: Verify local test environment only
+        run: |
+          test "$(curl -fsS http://localhost:8080/api/hello | grep -c 'Hello from Laravel')" -eq 1
+          test "$(curl -fsS http://127.0.0.1:8025/api/v1/info >/dev/null; echo $?)" -eq 0
+
       - name: Wait for API
         run: |
           for i in {1..30}; do
@@ -109,6 +114,15 @@ jobs:
         env:
           VITE_API_PROXY_TARGET: http://localhost:8080
         run: npm run test:e2e -- tests/e2e/order-flow-real-backend.spec.js
+
+      - name: Run real email-MFA E2E flow
+        working-directory: frontend
+        env:
+          VITE_API_PROXY_TARGET: http://localhost:8080
+          PLAYWRIGHT_MFA_EMAIL_E2E: '1'
+          PLAYWRIGHT_BACKEND_URL: http://localhost:8080
+          PLAYWRIGHT_MAILPIT_URL: http://127.0.0.1:8025
+        run: npm run test:e2e -- tests/e2e/superadmin-email-mfa-login.spec.js
 
       - name: Upload Playwright report on failure
         if: failure()

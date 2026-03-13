@@ -3,20 +3,47 @@
     <div class="login-box">
       <h2>Iniciar Sesión</h2>
       <form @submit.prevent="handleLogin">
-        <div class="form-group">
+        <div class="form-group" v-if="!mfaStep">
           <label for="email">Email:</label>
           <input v-model="email" type="email" id="email" placeholder="tu@email.com" required />
         </div>
 
-        <div class="form-group">
+        <div class="form-group" v-if="!mfaStep">
           <label for="password">Contraseña:</label>
           <input v-model="password" type="password" id="password" placeholder="••••••••" required />
         </div>
 
+        <div class="form-group" v-if="mfaStep">
+          <label for="mfa">Código MFA (correo):</label>
+          <input v-model="mfaCode" type="text" id="mfa" inputmode="numeric" maxlength="6" placeholder="123456" required />
+          <small class="helper-text">Revisa tu email e ingresa el código de 6 dígitos.</small>
+        </div>
+
         <div v-if="error" class="error-message">{{ error }}</div>
+        <div v-if="infoMessage" class="info-message">{{ infoMessage }}</div>
 
         <button :disabled="isLoading" type="submit" class="btn-login">
-          {{ isLoading ? 'Cargando...' : 'Ingresar' }}
+          {{ isLoading ? 'Cargando...' : (mfaStep ? 'Verificar código' : 'Ingresar') }}
+        </button>
+
+        <button
+          v-if="mfaStep"
+          type="button"
+          class="btn-secondary btn-secondary-light"
+          :disabled="isLoading"
+          @click="resendMfaCode"
+        >
+          Reenviar código MFA
+        </button>
+
+        <button
+          v-if="mfaStep"
+          type="button"
+          class="btn-secondary"
+          :disabled="isLoading"
+          @click="resetMfaStep"
+        >
+          Cambiar credenciales
         </button>
       </form>
 
@@ -30,9 +57,17 @@
       </button>
 
       <div class="demo-accounts">
-        <p><strong>Cuentas de prueba:</strong></p>
-        <p>Superadmin: superadmin@scan2order.local / superadmin123</p>
-        <p>Cliente: crea una nueva cuenta usando "Registrarse"</p>
+        <p><strong>Cuentas de prueba (local):</strong></p>
+        <div class="demo-list">
+          <div v-for="account in testAccounts" :key="account.email" class="demo-item">
+            <div class="demo-item-info">
+              <p class="demo-role">{{ account.role }}</p>
+              <p>{{ account.email }} / {{ account.password }}</p>
+              <p v-if="account.note" class="demo-note">{{ account.note }}</p>
+            </div>
+            <button type="button" class="btn-demo" @click="fillTestAccount(account)">Usar</button>
+          </div>
+        </div>
       </div>
 
       <div class="register-link">
@@ -49,11 +84,40 @@ import { useAuthStore } from '../stores/auth'
 
 const email = ref('')
 const password = ref('')
+const mfaCode = ref('')
+const mfaStep = ref(false)
 const isLoading = ref(false)
 const error = ref(null)
+const infoMessage = ref('')
 const router = useRouter()
 const route = useRoute()
 const auth = useAuthStore()
+const testAccounts = [
+  {
+    role: 'Superadmin',
+    email: 'superadmin@scan2order.local',
+    password: 'superadmin123',
+    note: 'Puede pedir MFA por correo',
+  },
+  {
+    role: 'Admin Demo',
+    email: 'admin.demo@scan2order.local',
+    password: 'admin123',
+    note: '',
+  },
+  {
+    role: 'Staff Demo (Caja/Cocina)',
+    email: 'staff.demo@scan2order.local',
+    password: 'staff123',
+    note: '',
+  },
+  {
+    role: 'Cliente Demo',
+    email: 'cliente.demo@scan2order.local',
+    password: 'cliente123',
+    note: '',
+  },
+]
 
 function getDefaultRouteByRole(role) {
   if (role === 'superadmin' || role === 'admin') return '/admin'
@@ -72,18 +136,56 @@ function getDefaultRouteByRole(role) {
 async function handleLogin() {
   isLoading.value = true
   error.value = null
+  infoMessage.value = ''
 
   try {
-    await auth.login(email.value, password.value)
+    await auth.login(email.value, password.value, mfaStep.value ? mfaCode.value : null)
     const redirectTarget = typeof route.query.redirect === 'string'
       ? route.query.redirect
       : getDefaultRouteByRole(auth.userRole)
     router.push(redirectTarget)
   } catch (err) {
     error.value = err.message
+
+    if (err?.mfaRequired) {
+      mfaStep.value = true
+      mfaCode.value = ''
+    }
   } finally {
     isLoading.value = false
   }
+}
+
+function resetMfaStep() {
+  mfaStep.value = false
+  mfaCode.value = ''
+  error.value = null
+  infoMessage.value = ''
+}
+
+async function resendMfaCode() {
+  isLoading.value = true
+  error.value = null
+  infoMessage.value = ''
+
+  try {
+    await auth.login(email.value, password.value)
+  } catch (err) {
+    if (err?.mfaRequired) {
+      infoMessage.value = 'Código reenviado. Revisa tu correo.'
+      return
+    }
+
+    error.value = err.message || 'No se pudo reenviar el código'
+  } finally {
+    isLoading.value = false
+  }
+}
+
+function fillTestAccount(account) {
+  email.value = account.email
+  password.value = account.password
+  resetMfaStep()
 }
 </script>
 
@@ -147,6 +249,15 @@ async function handleLogin() {
   font-size: 0.9rem;
 }
 
+.info-message {
+  background: #e8f6ff;
+  color: #1f618d;
+  padding: 0.75rem;
+  border-radius: 5px;
+  margin-bottom: 1rem;
+  font-size: 0.9rem;
+}
+
 .btn-login {
   width: 100%;
   padding: 0.75rem;
@@ -158,6 +269,35 @@ async function handleLogin() {
   font-weight: 600;
   cursor: pointer;
   transition: opacity 0.3s ease;
+}
+
+.btn-secondary {
+  width: 100%;
+  margin-top: 0.75rem;
+  padding: 0.75rem;
+  background: #ecf0f1;
+  color: #2c3e50;
+  border: none;
+  border-radius: 5px;
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.btn-secondary:hover:not(:disabled) {
+  background: #dde3e6;
+}
+
+.btn-secondary-light {
+  margin-top: 0.75rem;
+  background: #f8f9fa;
+}
+
+.helper-text {
+  display: block;
+  margin-top: 0.5rem;
+  color: #7f8c8d;
+  font-size: 0.85rem;
 }
 
 .btn-login:hover:not(:disabled) {
@@ -235,6 +375,49 @@ async function handleLogin() {
 .demo-accounts strong {
   display: block;
   margin-bottom: 0.5rem;
+}
+
+.demo-list {
+  display: grid;
+  gap: 0.6rem;
+}
+
+.demo-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+  background: #fff;
+  border-radius: 5px;
+  padding: 0.6rem;
+}
+
+.demo-item-info {
+  min-width: 0;
+}
+
+.demo-role {
+  font-weight: 700;
+  color: #2c3e50;
+}
+
+.demo-note {
+  color: #7f8c8d;
+  font-size: 0.8rem;
+}
+
+.btn-demo {
+  border: none;
+  border-radius: 5px;
+  background: #667eea;
+  color: #fff;
+  font-weight: 600;
+  padding: 0.45rem 0.7rem;
+  cursor: pointer;
+}
+
+.btn-demo:hover {
+  opacity: 0.9;
 }
 
 .register-link {

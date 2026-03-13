@@ -39,12 +39,6 @@
               :key="item.id" 
               class="cart-item"
             >
-              <div class="item-image">
-                <div class="item-image-placeholder">
-                  {{ item.name.charAt(0) }}
-                </div>
-              </div>
-
               <div class="item-details">
                 <h3 class="item-name">{{ item.name }}</h3>
                 <p v-if="item.description" class="item-description">
@@ -107,10 +101,6 @@
                 <span>Impuesto (10%):</span>
                 <span>${{ (cart.total * 0.1).toFixed(2) }}</span>
               </div>
-              <div class="summary-row">
-                <span>Envío:</span>
-                <span>$5.00</span>
-              </div>
               <div class="summary-divider"></div>
               <div class="summary-row summary-total">
                 <span>Total:</span>
@@ -127,22 +117,6 @@
               Seguir comprando
             </router-link>
           </div>
-
-          <!-- Trust Badges -->
-          <div class="trust-badges">
-            <div class="badge">
-              <span class="badge-icon">🔒</span>
-              <span class="badge-text">Pago seguro</span>
-            </div>
-            <div class="badge">
-              <span class="badge-icon">🚚</span>
-              <span class="badge-text">Envío rápido</span>
-            </div>
-            <div class="badge">
-              <span class="badge-icon">⚡</span>
-              <span class="badge-text">30-45 min</span>
-            </div>
-          </div>
         </div>
       </div>
     </div>
@@ -156,7 +130,7 @@ import { useCartStore } from '../../stores/cart'
 const cart = useCartStore()
 
 const totalWithFees = computed(() => {
-  return cart.total * 1.1 + 5.00
+  return cart.total * 1.1
 })
 
 function decreaseQuantity(productId) {
@@ -345,7 +319,7 @@ function removeItem(productId) {
 
 .cart-item {
   display: grid;
-  grid-template-columns: 80px 1fr auto;
+  grid-template-columns: 1fr auto;
   gap: 1.5rem;
   padding: 1.5rem;
   border: 2px solid #f0f0f0;
@@ -357,25 +331,6 @@ function removeItem(productId) {
   border-color: #667eea;
   box-shadow: 0 8px 30px rgba(102, 126, 234, 0.15);
   transform: translateY(-2px);
-}
-
-.item-image {
-  width: 80px;
-  height: 80px;
-  flex-shrink: 0;
-}
-
-.item-image-placeholder {
-  width: 100%;
-  height: 100%;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  border-radius: 12px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: white;
-  font-size: 2rem;
-  font-weight: 700;
 }
 
 .item-details {
@@ -419,20 +374,20 @@ function removeItem(productId) {
   align-items: center;
   gap: 0.5rem;
   background: #f8f9fa;
+  padding: 0.4rem;
   border-radius: 50px;
-  padding: 0.3rem;
 }
 
 .qty-btn {
-  width: 36px;
-  height: 36px;
+  width: 32px;
+  height: 32px;
   border: none;
   background: white;
+  color: #667eea;
   border-radius: 50%;
   cursor: pointer;
   font-size: 1.2rem;
-  font-weight: 600;
-  color: #667eea;
+  font-weight: 700;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -674,17 +629,13 @@ function removeItem(productId) {
   }
 
   .cart-item {
-    grid-template-columns: 60px 1fr;
+    grid-template-columns: 1fr;
     gap: 1rem;
   }
 
   .item-image {
     width: 60px;
     height: 60px;
-  }
-
-  .item-image-placeholder {
-    font-size: 1.5rem;
   }
 
   .item-actions {

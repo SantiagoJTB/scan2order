@@ -83,6 +83,10 @@
           <span class="btn-icon">📊</span>
           Informes
         </router-link>
+        <router-link v-if="isSuperAdmin" to="/admin/security" class="action-btn">
+          <span class="btn-icon">🛡️</span>
+          Seguridad
+        </router-link>
       </div>
     </div>
   </div>

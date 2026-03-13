@@ -27,6 +27,11 @@
             <p class="restaurant-address">{{ restaurant.address || 'Sin dirección' }}</p>
             <p class="restaurant-phone">{{ restaurant.phone || 'Sin teléfono' }}</p>
             <p class="restaurant-created">📅 {{ formatDate(restaurant.created_at) }}</p>
+            <div class="service-tags">
+              <span class="service-tag" :class="restaurant.service_local_enabled ? 'service-on' : 'service-off'">Local</span>
+              <span class="service-tag" :class="restaurant.service_takeaway_enabled ? 'service-on' : 'service-off'">Para llevar</span>
+              <span class="service-tag" :class="restaurant.service_pickup_enabled ? 'service-on' : 'service-off'">Recoger</span>
+            </div>
             <div class="restaurant-admins">
               <strong>Admins:</strong>
               <div v-if="Array.isArray(restaurant.admins) && restaurant.admins.length" class="admin-lines">
@@ -57,9 +62,8 @@
           </div>
           <div class="restaurant-actions">
             <button class="btn-action btn-main-ops" @click="openOperations(restaurant, $event)" title="Ver caja + cocina (Ctrl/Cmd + click: nueva pestaña)">💼 Caja + Cocina</button>
-            <button class="btn-action btn-main-ops" @click="openCaja(restaurant, $event)" title="Ver caja (Ctrl/Cmd + click: nueva pestaña)">🧾 Caja</button>
-            <button class="btn-action btn-main-ops" @click="openCocina(restaurant, $event)" title="Ver cocina (Ctrl/Cmd + click: nueva pestaña)">👨‍🍳 Cocina</button>
           </div>
+
           <details class="operations-menu">
             <summary>Más opciones</summary>
             <div class="operations-links">
@@ -89,76 +93,106 @@
         </div>
 
         <form @submit.prevent="saveRestaurant" class="modal-body">
-          <div class="form-group">
-            <label for="name">Nombre:</label>
-            <input id="name" v-model="form.name" type="text" required placeholder="Nombre del restaurante" />
-          </div>
+          <div class="form-layout">
+            <section class="form-section">
+              <h3 class="section-title">Información del restaurante</h3>
+              <div class="form-grid">
+                <div class="form-group">
+                  <label for="name">Nombre:</label>
+                  <input id="name" v-model="form.name" type="text" required placeholder="Nombre del restaurante" />
+                </div>
 
-          <div class="form-group">
-            <label for="address">Dirección:</label>
-            <input id="address" v-model="form.address" type="text" placeholder="Dirección" />
-          </div>
+                <div class="form-group">
+                  <label for="phone">Teléfono:</label>
+                  <input id="phone" v-model="form.phone" type="text" placeholder="Teléfono" />
+                </div>
+              </div>
 
-          <div class="form-group">
-            <label for="phone">Teléfono:</label>
-            <input id="phone" v-model="form.phone" type="text" placeholder="Teléfono" />
-          </div>
+              <div class="form-group">
+                <label for="address">Dirección:</label>
+                <input id="address" v-model="form.address" type="text" placeholder="Dirección" />
+              </div>
 
-          <div class="form-group checkbox-group">
-            <label>
-              <input v-model="form.active" type="checkbox" />
-              Restaurante activo
-            </label>
-          </div>
+              <div class="form-group checkbox-group form-group-no-margin">
+                <label>
+                  <input v-model="form.active" type="checkbox" />
+                  Restaurante activo
+                </label>
+              </div>
+            </section>
 
-          <div class="form-group">
-            <label>Admin vinculado:</label>
-            <div v-if="isLoadingAdmins" class="admins-loading">Cargando admins...</div>
-            <div v-else-if="adminOptions.length === 0" class="admins-empty">No hay admins disponibles</div>
-            <div v-else class="admins-list">
-              <label v-for="admin in adminOptions" :key="admin.id" class="admin-item">
-                <input
-                  v-model="form.adminId"
-                  type="radio"
-                  :value="admin.id"
-                  :disabled="isOnlyOwnAdminSelectable && admin.id !== auth.user?.id"
-                />
-                <span>{{ admin.name }} ({{ admin.email }})</span>
-              </label>
-            </div>
-          </div>
+            <section class="form-section service-config-inline">
+              <h3 class="section-title">Opciones de servicio</h3>
+              <div class="service-options-list">
+                <label>
+                  <input v-model="form.serviceLocalEnabled" type="checkbox" />
+                  Comer aquí
+                </label>
+                <label>
+                  <input v-model="form.serviceTakeawayEnabled" type="checkbox" />
+                  Para llevar
+                </label>
+                <label>
+                  <input v-model="form.servicePickupEnabled" type="checkbox" />
+                  Recoger
+                </label>
+              </div>
+              <small class="service-help">Debe haber al menos una opción habilitada.</small>
+            </section>
 
-          <div class="form-group">
-            <label>Staff asignado:</label>
-            <div v-if="isLoadingStaffs" class="admins-loading">Cargando staffs...</div>
-            <div v-else-if="staffOptions.length === 0" class="admins-empty">No hay staffs disponibles</div>
-            <div v-else class="admins-list">
-              <label
-                v-for="staff in staffOptionsWithAssignment"
-                :key="staff.id"
-                class="admin-item"
-                :class="{ 'admin-item-disabled': staff.disabled }"
-              >
-                <input
-                  v-model="form.staffIds"
-                  type="checkbox"
-                  :value="staff.id"
-                  :disabled="staff.disabled"
-                />
-                <span>
-                  {{ staff.name }} ({{ staff.email }})
-                  <span v-if="staff.disabledReason" class="staff-assigned-info">
-                    · {{ staff.disabledReason }}
-                  </span>
-                  <span v-if="staff.assignedRestaurantName" class="staff-assigned-info">
-                    · Asignado a: {{ staff.assignedRestaurantName }}
-                  </span>
-                  <span v-else class="staff-available-info">
-                    · Disponible
-                  </span>
-                </span>
-              </label>
-            </div>
+            <section class="form-section">
+              <h3 class="section-title">Equipo</h3>
+
+              <div class="form-group">
+                <label>Admin vinculado:</label>
+                <div v-if="isLoadingAdmins" class="admins-loading">Cargando admins...</div>
+                <div v-else-if="adminOptions.length === 0" class="admins-empty">No hay admins disponibles</div>
+                <div v-else class="admins-list">
+                  <label v-for="admin in adminOptions" :key="admin.id" class="admin-item">
+                    <input
+                      v-model="form.adminId"
+                      type="radio"
+                      :value="admin.id"
+                      :disabled="isOnlyOwnAdminSelectable && admin.id !== auth.user?.id"
+                    />
+                    <span>{{ admin.name }} ({{ admin.email }})</span>
+                  </label>
+                </div>
+              </div>
+
+              <div class="form-group form-group-no-margin">
+                <label>Staff asignado:</label>
+                <div v-if="isLoadingStaffs" class="admins-loading">Cargando staffs...</div>
+                <div v-else-if="staffOptions.length === 0" class="admins-empty">No hay staffs disponibles</div>
+                <div v-else class="admins-list">
+                  <label
+                    v-for="staff in staffOptionsWithAssignment"
+                    :key="staff.id"
+                    class="admin-item"
+                    :class="{ 'admin-item-disabled': staff.disabled }"
+                  >
+                    <input
+                      v-model="form.staffIds"
+                      type="checkbox"
+                      :value="staff.id"
+                      :disabled="staff.disabled"
+                    />
+                    <span>
+                      {{ staff.name }} ({{ staff.email }})
+                      <span v-if="staff.disabledReason" class="staff-assigned-info">
+                        · {{ staff.disabledReason }}
+                      </span>
+                      <span v-if="staff.assignedRestaurantName" class="staff-assigned-info">
+                        · Asignado a: {{ staff.assignedRestaurantName }}
+                      </span>
+                      <span v-else class="staff-available-info">
+                        · Disponible
+                      </span>
+                    </span>
+                  </label>
+                </div>
+              </div>
+            </section>
           </div>
 
           <div v-if="formError" class="error">{{ formError }}</div>
@@ -257,6 +291,9 @@ const form = ref({
   address: '',
   phone: '',
   active: true,
+  serviceLocalEnabled: true,
+  serviceTakeawayEnabled: true,
+  servicePickupEnabled: true,
   adminId: null,
   staffIds: []
 })
@@ -352,6 +389,9 @@ function resetForm() {
     address: '',
     phone: '',
     active: true,
+    serviceLocalEnabled: true,
+    serviceTakeawayEnabled: true,
+    servicePickupEnabled: true,
     adminId: null,
     staffIds: []
   }
@@ -410,6 +450,9 @@ async function openEditModal(restaurant) {
     address: restaurant.address || '',
     phone: restaurant.phone || '',
     active: Boolean(restaurant.active),
+    serviceLocalEnabled: restaurant.service_local_enabled !== false,
+    serviceTakeawayEnabled: restaurant.service_takeaway_enabled !== false,
+    servicePickupEnabled: restaurant.service_pickup_enabled !== false,
     adminId: currentAdminId,
     staffIds: Array.isArray(restaurant.staffs) ? restaurant.staffs.map(staff => Number(staff.id)) : []
   }
@@ -435,14 +478,6 @@ function openOperations(restaurant, event) {
   navigateWithTabOption(`/admin/restaurants/${restaurant.id}/operations`, event)
 }
 
-function openCaja(restaurant, event) {
-  navigateWithTabOption(`/caja/${restaurant.id}`, event)
-}
-
-function openCocina(restaurant, event) {
-  navigateWithTabOption(`/cocina/${restaurant.id}`, event)
-}
-
 function closeFormModal() {
   showFormModal.value = false
   formError.value = null
@@ -463,6 +498,10 @@ async function saveRestaurant() {
       throw new Error('Debes seleccionar un admin para el restaurante')
     }
 
+    if (!form.value.serviceLocalEnabled && !form.value.serviceTakeawayEnabled && !form.value.servicePickupEnabled) {
+      throw new Error('Debes habilitar al menos una opción de servicio')
+    }
+
     const url = isEditing.value ? `/api/restaurants/${form.value.id}` : '/api/restaurants'
     const method = isEditing.value ? 'PUT' : 'POST'
 
@@ -477,7 +516,10 @@ async function saveRestaurant() {
         name: form.value.name,
         address: form.value.address || null,
         phone: form.value.phone || null,
-        active: form.value.active
+        active: form.value.active,
+        service_local_enabled: form.value.serviceLocalEnabled,
+        service_takeaway_enabled: form.value.serviceTakeawayEnabled,
+        service_pickup_enabled: form.value.servicePickupEnabled
       })
     })
 
@@ -747,6 +789,31 @@ onMounted(() => {
   font-weight: 500;
 }
 
+.service-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin-top: 0.45rem;
+}
+
+.service-tag {
+  display: inline-block;
+  padding: 0.2rem 0.55rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.service-on {
+  background: #e8f9ef;
+  color: #1e8a4c;
+}
+
+.service-off {
+  background: #f3f5f7;
+  color: #7f8c8d;
+}
+
 .restaurant-admins {
   margin: 0.35rem 0 0;
   color: #34495e;
@@ -790,6 +857,10 @@ onMounted(() => {
   gap: 0.5rem;
   border-top: 1px solid #ecf0f1;
   padding-top: 0.9rem;
+}
+
+.service-config-inline {
+  background: #f8fafc;
 }
 
 .operations-menu {
@@ -882,7 +953,7 @@ onMounted(() => {
   background: white;
   border-radius: 10px;
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
-  max-width: 500px;
+  max-width: 700px;
   width: 100%;
 }
 
@@ -918,8 +989,37 @@ onMounted(() => {
   padding: 1.5rem;
 }
 
+.form-layout {
+  display: grid;
+  gap: 0.9rem;
+}
+
+.form-section {
+  border: 1px solid #ecf0f1;
+  border-radius: 8px;
+  padding: 0.85rem;
+  background: #fff;
+}
+
+.section-title {
+  margin: 0 0 0.75rem;
+  color: #2c3e50;
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.85rem;
+}
+
 .form-group {
   margin-bottom: 1rem;
+}
+
+.form-group-no-margin {
+  margin-bottom: 0;
 }
 
 .form-group label {
@@ -951,6 +1051,25 @@ onMounted(() => {
 
 .checkbox-group input {
   width: auto;
+}
+
+.service-options-list {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.service-options-list label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0;
+  font-weight: 500;
+}
+
+.service-help {
+  display: block;
+  margin-top: 0.45rem;
+  color: #7f8c8d;
 }
 
 .admins-loading,
@@ -1066,6 +1185,10 @@ onMounted(() => {
 @media (max-width: 768px) {
   .modal {
     margin: 1rem;
+  }
+
+  .form-grid {
+    grid-template-columns: 1fr;
   }
 
   .restaurants-grid {

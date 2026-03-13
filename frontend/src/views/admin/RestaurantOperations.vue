@@ -30,8 +30,12 @@
 
           <div class="stats">
             <div class="stat-card">
-              <div class="stat-value">{{ pendingPaymentOrders.length }}</div>
-              <div class="stat-label">Pendientes</div>
+              <div class="stat-value">{{ pendingCollectionOrders.length }}</div>
+              <div class="stat-label">Pendientes de cobro</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-value">{{ readyPaymentOrders.length }}</div>
+              <div class="stat-label">Órdenes listas</div>
             </div>
             <div class="stat-card">
               <div class="stat-value">${{ pendingTotal.toFixed(2) }}</div>
@@ -41,29 +45,66 @@
 
           <div v-if="paymentLoading" class="loading">Cargando órdenes...</div>
           <div v-else-if="paymentError" class="error-box">{{ paymentError }}</div>
-          <div v-else-if="pendingPaymentOrders.length === 0" class="no-orders">
-            No hay órdenes pendientes de pago.
-          </div>
-
-          <div v-else class="orders-list">
-            <div v-for="order in pendingPaymentOrders" :key="order.id" class="order-card">
-              <div class="order-head">
-                <h3>Orden #{{ order.id }}</h3>
-                <span class="order-type">{{ getOrderTypeLabel(order.type) }}</span>
+          <div v-else class="payments-columns">
+            <div class="payments-column">
+              <h3 class="payments-column-title">Pendientes de cobro</h3>
+              <div v-if="pendingCollectionOrders.length === 0" class="no-orders">
+                No hay órdenes pendientes de cobro.
               </div>
+              <div v-else class="orders-list">
+                <div v-for="order in pendingCollectionOrders" :key="order.id" class="order-card">
+                  <div class="order-head">
+                    <h3>Orden #{{ order.id }}</h3>
+                    <span class="order-type">{{ getOrderTypeLabel(order.type) }}</span>
+                  </div>
 
-              <p class="order-meta"><strong>Total:</strong> ${{ Number(order.total || 0).toFixed(2) }}</p>
-              <p class="order-meta"><strong>Método:</strong> {{ getPaymentMethod(order) }}</p>
+                  <p class="order-meta"><strong>Estado:</strong> {{ getStatusLabel(order.status) }}</p>
+                  <p class="order-meta"><strong>Total:</strong> ${{ Number(order.total || 0).toFixed(2) }}</p>
+                  <p class="order-meta"><strong>Método:</strong> {{ getPaymentMethod(order) }}</p>
 
-              <ul v-if="order.order_items?.length" class="items-list">
-                <li v-for="item in order.order_items" :key="item.id">
-                  {{ item.quantity }} x {{ item.product?.name || `Producto #${item.product_id}` }}
-                </li>
-              </ul>
+                  <ul v-if="order.order_items?.length" class="items-list">
+                    <li v-for="item in order.order_items" :key="item.id">
+                      {{ item.quantity }} x {{ item.product?.name || `Producto #${item.product_id}` }}
+                    </li>
+                  </ul>
 
-              <div class="order-actions">
-                <button class="btn btn-paid" @click="markAsPaid(order)">Cobrada</button>
-                <button class="btn btn-cancel" @click="markAsCancelled(order)">Cancelar</button>
+                  <div class="order-actions">
+                    <button class="btn btn-paid" @click="markAsPaid(order)">Cobrada</button>
+                    <button class="btn btn-cancel" @click="markAsCancelled(order)">Cancelar</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="payments-column">
+              <h3 class="payments-column-title">Órdenes listas</h3>
+              <div v-if="readyPaymentOrders.length === 0" class="no-orders">
+                No hay órdenes listas pendientes de cobro.
+              </div>
+              <div v-else class="orders-list">
+                <div v-for="order in readyPaymentOrders" :key="order.id" class="order-card status-completed">
+                  <div class="order-head">
+                    <h3>Orden #{{ order.id }}</h3>
+                    <span class="order-type">{{ getOrderTypeLabel(order.type) }}</span>
+                  </div>
+
+                  <p class="ready-priority">🔔 Prioridad de cobro</p>
+
+                  <p class="order-meta"><strong>Estado:</strong> {{ getStatusLabel(order.status) }}</p>
+                  <p class="order-meta"><strong>Total:</strong> ${{ Number(order.total || 0).toFixed(2) }}</p>
+                  <p class="order-meta"><strong>Método:</strong> {{ getPaymentMethod(order) }}</p>
+
+                  <ul v-if="order.order_items?.length" class="items-list">
+                    <li v-for="item in order.order_items" :key="item.id">
+                      {{ item.quantity }} x {{ item.product?.name || `Producto #${item.product_id}` }}
+                    </li>
+                  </ul>
+
+                  <div class="order-actions">
+                    <button class="btn btn-paid" @click="markAsPaid(order)">Cobrada</button>
+                    <button class="btn btn-cancel" @click="markAsCancelled(order)">Cancelar</button>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
@@ -222,13 +263,37 @@ const kitchenRefreshId = ref(null)
 const pendingPaymentOrders = computed(() =>
   paymentOrders.value.filter(order => {
     const status = String(order.status || '').toLowerCase()
-    if (['completed', 'cancelled', 'paid'].includes(status)) return false
+    if (['cancelled', 'paid'].includes(status)) return false
 
     const payments = order.payments || []
     if (payments.length === 0) return true
 
     return payments.some(payment => String(payment.status || '').toLowerCase() === 'pending')
   })
+)
+
+function orderRecencyValue(order) {
+  const byUpdatedAt = new Date(order?.updated_at || '').getTime()
+  if (!Number.isNaN(byUpdatedAt) && byUpdatedAt > 0) return byUpdatedAt
+
+  const byCreatedAt = new Date(order?.created_at || '').getTime()
+  if (!Number.isNaN(byCreatedAt) && byCreatedAt > 0) return byCreatedAt
+
+  return Number(order?.id || 0)
+}
+
+const readyPaymentOrders = computed(() =>
+  pendingPaymentOrders.value
+    .filter(order => String(order.status || '').toLowerCase() === 'completed')
+    .slice()
+    .sort((a, b) => orderRecencyValue(b) - orderRecencyValue(a))
+)
+
+const pendingCollectionOrders = computed(() =>
+  pendingPaymentOrders.value
+    .filter(order => String(order.status || '').toLowerCase() !== 'completed')
+    .slice()
+    .sort((a, b) => orderRecencyValue(b) - orderRecencyValue(a))
 )
 
 const pendingTotal = computed(() =>
@@ -849,7 +914,7 @@ onBeforeUnmount(() => {
 
 .stats {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 10px;
   margin-bottom: 20px;
 }
@@ -893,6 +958,37 @@ onBeforeUnmount(() => {
   display: flex;
   flex-direction: column;
   gap: 12px;
+}
+
+.payments-columns {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.payments-column {
+  background: #fdfdfd;
+  border: 1px solid #eceff3;
+  border-radius: 10px;
+  padding: 10px;
+}
+
+.payments-column-title {
+  margin: 2px 0 10px;
+  color: #2c3e50;
+  font-size: 14px;
+}
+
+.ready-priority {
+  margin: 0 0 8px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #1e8a4c;
+  background: #e9f8ef;
+  border: 1px solid #bfe8cd;
+  border-radius: 999px;
+  display: inline-block;
+  padding: 3px 10px;
 }
 
 .order-card {
@@ -1007,6 +1103,16 @@ onBeforeUnmount(() => {
   font-weight: 500;
   text-align: center;
   flex-grow: 1;
+}
+
+@media (max-width: 1100px) {
+  .stats {
+    grid-template-columns: 1fr;
+  }
+
+  .payments-columns {
+    grid-template-columns: 1fr;
+  }
 }
 
 .toast {

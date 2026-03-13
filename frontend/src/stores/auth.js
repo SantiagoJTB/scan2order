@@ -62,19 +62,24 @@ export const useAuthStore = defineStore('auth', () => {
       }
     }
 
-  async function login(email, password) {
+  async function login(email, password, mfaCode = null) {
     isLoading.value = true
     error.value = null
     try {
+      const payload = { email, password }
+      if (mfaCode) payload.mfa_code = String(mfaCode)
+
       const response = await fetch('/api/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password })
+        body: JSON.stringify(payload)
       })
       
       if (!response.ok) {
         const data = await response.json()
-        throw new Error(data.message || 'Login failed')
+        const loginError = new Error(data.message || 'Login failed')
+        loginError.mfaRequired = Boolean(data?.mfa_required)
+        throw loginError
       }
 
       const data = await response.json()

@@ -10,6 +10,26 @@ use Illuminate\Support\Facades\DB;
 
 class UserController extends Controller
 {
+    private function isLastActiveSuperadmin(User $user): bool
+    {
+        $user->loadMissing('role');
+
+        if ($user->role?->name !== 'superadmin') {
+            return false;
+        }
+
+        $superadminRoleId = Role::where('name', 'superadmin')->value('id');
+        if (!$superadminRoleId) {
+            return false;
+        }
+
+        $activeSuperadmins = User::where('role_id', $superadminRoleId)
+            ->where('status', 'active')
+            ->count();
+
+        return $activeSuperadmins <= 1 && $user->status === 'active';
+    }
+
     /**
      * Create a new user with specific role.
      * Superadmin can create Admin, Caja, Cocina, Cliente
@@ -27,7 +47,7 @@ class UserController extends Controller
         $data = $request->validate([
             'name' => 'required|string|max:255',
             'email' => 'required|string|email|max:255|unique:users',
-            'password' => 'required|string|min:6',
+            'password' => 'required|string|min:6|confirmed',
             'phone' => 'nullable|string|max:20',
             'role' => 'required|string|in:admin,staff,cliente',
             'assign_to_admin' => 'nullable|boolean',
@@ -71,6 +91,16 @@ class UserController extends Controller
                 'status' => 'active',
             ]);
             $createdUsers[] = $this->formatUser($adminUser);
+            $this->auditAction(
+                actor: $user,
+                action: 'user.create',
+                resourceType: 'user',
+                resourceId: $adminUser->id,
+                targetUser: $adminUser,
+                metadata: ['role' => 'admin'],
+                ipAddress: $request->ip(),
+                userAgent: (string) $request->userAgent()
+            );
 
             // Auto-create staff user for this admin
             $staffRole = Role::where('name', 'staff')->first();
@@ -86,6 +116,16 @@ class UserController extends Controller
                     'status' => 'active',
                 ]);
                 $createdUsers[] = $this->formatUser($staffUser);
+                $this->auditAction(
+                    actor: $user,
+                    action: 'user.create_linked_staff',
+                    resourceType: 'user',
+                    resourceId: $staffUser->id,
+                    targetUser: $staffUser,
+                    metadata: ['role' => 'staff', 'linked_to_admin_id' => $adminUser->id],
+                    ipAddress: $request->ip(),
+                    userAgent: (string) $request->userAgent()
+                );
             }
         } else {
             $createdBy = $user->id;
@@ -120,6 +160,16 @@ class UserController extends Controller
                 'status' => 'active',
             ]);
             $createdUsers[] = $this->formatUser($newUser);
+            $this->auditAction(
+                actor: $user,
+                action: 'user.create',
+                resourceType: 'user',
+                resourceId: $newUser->id,
+                targetUser: $newUser,
+                metadata: ['role' => $data['role'], 'created_by' => $createdBy],
+                ipAddress: $request->ip(),
+                userAgent: (string) $request->userAgent()
+            );
         }
 
         return response()->json([
@@ -144,7 +194,25 @@ class UserController extends Controller
             'status' => 'required|in:active,inactive,suspended',
         ]);
 
+        if ($data['status'] !== 'active' && $this->isLastActiveSuperadmin($user)) {
+            return response()->json([
+                'message' => 'Cannot deactivate the last active superadmin',
+            ], 422);
+        }
+
+        $previousStatus = $user->status;
         $user->update(['status' => $data['status']]);
+
+        $this->auditAction(
+            actor: $currentUser,
+            action: 'user.status_update',
+            resourceType: 'user',
+            resourceId: $user->id,
+            targetUser: $user,
+            metadata: ['from' => $previousStatus, 'to' => $data['status']],
+            ipAddress: $request->ip(),
+            userAgent: (string) $request->userAgent()
+        );
         
         return response()->json([
             'message' => 'User status updated',
@@ -230,11 +298,35 @@ class UserController extends Controller
             'phone' => 'nullable|string|max:20',
         ]);
 
+        $before = [
+            'name' => $user->name,
+            'email' => $user->email,
+            'phone' => $user->phone,
+        ];
+
         $user->update([
             'name' => $data['name'],
             'email' => $data['email'],
             'phone' => $data['phone'] ?? null,
         ]);
+
+        $this->auditAction(
+            actor: $currentUser,
+            action: 'user.update',
+            resourceType: 'user',
+            resourceId: $user->id,
+            targetUser: $user,
+            metadata: [
+                'before' => $before,
+                'after' => [
+                    'name' => $data['name'],
+                    'email' => $data['email'],
+                    'phone' => $data['phone'] ?? null,
+                ],
+            ],
+            ipAddress: $request->ip(),
+            userAgent: (string) $request->userAgent()
+        );
 
         return response()->json([
             'message' => 'User updated successfully',
@@ -256,6 +348,16 @@ class UserController extends Controller
 
         // Allow clients to delete their own account
         if ($currentUser->id === $user->id && $userRole === 'cliente') {
+            $this->auditAction(
+                actor: $currentUser,
+                action: 'user.self_delete',
+                resourceType: 'user',
+                resourceId: $user->id,
+                targetUser: $user,
+                metadata: ['role' => 'cliente'],
+                ipAddress: $request->ip(),
+                userAgent: (string) $request->userAgent()
+            );
             $user->delete();
             return response()->json([
                 'message' => 'Account deleted successfully'
@@ -288,6 +390,12 @@ class UserController extends Controller
             }
         }
 
+        if ($this->isLastActiveSuperadmin($user)) {
+            return response()->json([
+                'message' => 'Cannot delete the last active superadmin',
+            ], 422);
+        }
+
         $deletedLinkedAccounts = 0;
 
         DB::transaction(function () use ($user, &$deletedLinkedAccounts) {
@@ -298,6 +406,20 @@ class UserController extends Controller
 
             $user->delete();
         });
+
+        $this->auditAction(
+            actor: $currentUser,
+            action: 'user.delete',
+            resourceType: 'user',
+            resourceId: $user->id,
+            targetUser: $user,
+            metadata: [
+                'target_role' => $userRole,
+                'deleted_linked_accounts' => $deletedLinkedAccounts,
+            ],
+            ipAddress: $request->ip(),
+            userAgent: (string) $request->userAgent()
+        );
 
         $message = 'User deleted successfully';
         if ($deletedLinkedAccounts > 0) {
@@ -311,15 +433,23 @@ class UserController extends Controller
     }
 
     /**
-     * Update user password (superadmin only).
+     * Update user password.
+     * - Superadmin can change any user password.
+     * - Admin can only change passwords of their own staff users.
      */
-    public function updatePassword(Request $request, User $targetUser)
+    public function updatePassword(Request $request, User $user)
     {
         $currentUser = $request->user();
+        $targetUser = $user->loadMissing('role');
 
-        // Only superadmin can change passwords
-        if (!$currentUser->hasRole('superadmin')) {
-            return response()->json(['message' => 'Unauthorized. Only superadmin can change passwords'], 403);
+        if (!$currentUser->hasAnyRole(['superadmin', 'admin'])) {
+            return response()->json(['message' => 'Unauthorized'], 403);
+        }
+
+        if ($currentUser->hasRole('admin') && !$currentUser->hasRole('superadmin')) {
+            if ($targetUser->created_by !== $currentUser->id || $targetUser->role?->name !== 'staff') {
+                return response()->json(['message' => 'Admin can only change passwords of their own staff users'], 403);
+            }
         }
 
         $data = $request->validate([
@@ -327,8 +457,19 @@ class UserController extends Controller
         ]);
 
         $targetUser->update([
-            'password' => Hash::make($data['password'])
+            'password' => $data['password']
         ]);
+
+        $this->auditAction(
+            actor: $currentUser,
+            action: 'user.password_update',
+            resourceType: 'user',
+            resourceId: $targetUser->id,
+            targetUser: $targetUser,
+            metadata: ['by_role' => $currentUser->role?->name],
+            ipAddress: $request->ip(),
+            userAgent: (string) $request->userAgent()
+        );
 
         return response()->json([
             'message' => 'Password updated successfully',

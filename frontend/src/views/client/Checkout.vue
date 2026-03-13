@@ -10,18 +10,31 @@
         <div class="section">
           <h2>Tipo de consumo</h2>
           <div class="order-types">
-            <label class="payment-option">
-              <input v-model="formData.orderType" type="radio" value="local" required />
-              <span>Consumir en el local</span>
+            <label v-for="option in availableOrderTypes" :key="option.value" class="payment-option">
+              <input v-model="formData.orderType" type="radio" :value="option.value" required />
+              <span>{{ option.label }}</span>
             </label>
-            <label class="payment-option">
-              <input v-model="formData.orderType" type="radio" value="takeaway" />
-              <span>Para llevar</span>
-            </label>
+          </div>
+          <div v-if="!hasAvailableOrderTypes" class="error-message">
+            Este restaurante no tiene modalidades de pedido habilitadas por administración.
           </div>
         </div>
 
-        <div class="section">
+        <div class="section" v-if="formData.orderType === 'local'">
+          <h2>Mesa</h2>
+          <div class="form-group">
+            <label for="table-number">Número de mesa:</label>
+            <input
+              v-model="formData.tableNumber"
+              type="text"
+              id="table-number"
+              placeholder="Ej: 12"
+              required
+            />
+          </div>
+        </div>
+
+        <div class="section" v-if="formData.orderType === 'takeaway'">
           <h2>Datos adicionales</h2>
           <div class="form-group">
             <label for="address">Dirección:</label>
@@ -29,7 +42,8 @@
               v-model="formData.address"
               type="text"
               id="address"
-              placeholder="Referencia opcional"
+              placeholder="Dirección de entrega"
+              required
             />
           </div>
           <div class="form-row">
@@ -54,15 +68,29 @@
           </div>
         </div>
 
+        <div class="section" v-if="formData.orderType === 'pickup'">
+          <h2>Datos para recoger</h2>
+          <div class="form-group">
+            <label for="pickup-name">Nombre de quien recoge:</label>
+            <input
+              v-model="formData.pickupName"
+              type="text"
+              id="pickup-name"
+              placeholder="Nombre y apellido"
+              required
+            />
+          </div>
+        </div>
+
         <div class="section">
           <h2>Método de pago</h2>
           <div class="payment-methods">
             <label class="payment-option">
               <input v-model="formData.paymentMethod" type="radio" value="card" required />
-              <span>Tarjeta de crédito/débito</span>
+              <span>Pagar con tarjeta</span>
             </label>
             <label class="payment-option">
-              <input v-model="formData.paymentMethod" type="radio" value="cash" />
+              <input v-model="formData.paymentMethod" type="radio" value="cash" required />
               <span>Pago en efectivo al recibir</span>
             </label>
             <label class="payment-option">
@@ -71,27 +99,8 @@
             </label>
           </div>
 
-          <!-- Card payment form (Stripe Elements) -->
-          <div v-if="formData.paymentMethod === 'card'" class="card-form">
-            <div class="form-group">
-              <label for="cardname">Nombre en la tarjeta:</label>
-              <input
-                v-model="formData.cardName"
-                type="text"
-                id="cardname"
-                placeholder="Nombre completo"
-              />
-            </div>
-            <div class="form-group">
-              <label>Datos de la tarjeta:</label>
-              <div ref="cardElementRef" class="stripe-card-element"></div>
-            </div>
-            <p v-if="stripePublicKeyMissing" class="stripe-hint stripe-error">
-              Configura VITE_STRIPE_KEY para habilitar pagos con tarjeta.
-            </p>
-            <p v-else class="stripe-hint">
-              Usa una tarjeta de prueba de Stripe (ej: 4242 4242 4242 4242).
-            </p>
+          <div v-if="formData.paymentMethod === 'card'" class="payment-warning">
+            No tienes una tarjeta registrada todavía. Por ahora enviaremos el pedido igualmente.
           </div>
         </div>
 
@@ -101,7 +110,7 @@
           <router-link to="/cart" class="btn-back">← Volver</router-link>
           <button
             @click="processPayment"
-            :disabled="isLoading"
+            :disabled="isLoading || !hasAvailableOrderTypes"
             class="btn-pay"
           >
             {{ isLoading ? 'Procesando...' : `Pagar $${totalAmount.toFixed(2)}` }}
@@ -164,11 +173,10 @@
 </template>
 
 <script setup>
-import { ref, computed, nextTick, watch, onBeforeUnmount } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useCartStore } from '../../stores/cart'
 import { useAuthStore } from '../../stores/auth'
 import { useRouter } from 'vue-router'
-import { loadStripe } from '@stripe/stripe-js'
 
 const cart = useCartStore()
 const auth = useAuthStore()
@@ -177,23 +185,21 @@ const isLoading = ref(false)
 const error = ref(null)
 const showSuccess = ref(false)
 const orderNumber = ref(null)
-const stripeClientSecret = ref(null)
-const stripe = ref(null)
-const stripeElements = ref(null)
-const stripeCardElement = ref(null)
-const cardElementRef = ref(null)
+const restaurantServices = ref({
+  local: true,
+  takeaway: true,
+  pickup: true,
+})
 
 const formData = ref({
   orderType: 'local',
+  tableNumber: '',
+  pickupName: '',
   address: '',
   city: '',
   postalcode: '',
-  paymentMethod: 'card',
-  cardName: ''
+  paymentMethod: 'card'
 })
-
-const stripePublicKey = import.meta.env.VITE_STRIPE_KEY
-const stripePublicKeyMissing = computed(() => !stripePublicKey)
 
 const totalAmount = computed(() => {
   const tax = cart.total * 0.1
@@ -201,9 +207,28 @@ const totalAmount = computed(() => {
   return cart.total + tax + service
 })
 
+const availableOrderTypes = computed(() => {
+  const options = []
+  if (restaurantServices.value.local) {
+    options.push({ value: 'local', label: 'Consumir en el local' })
+  }
+  if (restaurantServices.value.takeaway) {
+    options.push({ value: 'takeaway', label: 'Para llevar' })
+  }
+  if (restaurantServices.value.pickup) {
+    options.push({ value: 'pickup', label: 'Recoger' })
+  }
+  return options
+})
+
+const hasAvailableOrderTypes = computed(() => availableOrderTypes.value.length > 0)
+
 const successMessage = computed(() => {
   if (formData.value.orderType === 'takeaway') {
     return 'Tu pedido estará listo para recoger en aproximadamente 20-30 minutos.'
+  }
+  if (formData.value.orderType === 'pickup') {
+    return 'Tu pedido estará listo para recoger en el local en aproximadamente 20-30 minutos.'
   }
   return 'Tu pedido será preparado para consumir en el local en aproximadamente 20-30 minutos.'
 })
@@ -231,6 +256,41 @@ async function processPayment() {
   }
 }
 
+function ensureSelectedOrderTypeIsValid() {
+  const selected = formData.value.orderType
+  const exists = availableOrderTypes.value.some(option => option.value === selected)
+  if (exists) return
+
+  formData.value.orderType = availableOrderTypes.value[0]?.value || 'local'
+}
+
+async function fetchRestaurantServiceOptions() {
+  const restaurantId = cart.items[0]?.restaurantId
+  if (!restaurantId) return
+
+  try {
+    const response = await fetch(`/api/restaurants/${restaurantId}`, {
+      headers: {
+        Accept: 'application/json',
+        ...(auth.token ? { Authorization: `Bearer ${auth.token}` } : {}),
+      }
+    })
+
+    if (!response.ok) return
+
+    const data = await response.json()
+    restaurantServices.value = {
+      local: data?.service_local_enabled !== false,
+      takeaway: data?.service_takeaway_enabled !== false,
+      pickup: data?.service_pickup_enabled !== false,
+    }
+
+    ensureSelectedOrderTypeIsValid()
+  } catch {
+    // Keep defaults when service options cannot be loaded
+  }
+}
+
 function goHome() {
   showSuccess.value = false
   router.push('/orders')
@@ -250,12 +310,39 @@ async function createOrderWithItems() {
     throw new Error('No se pudo determinar el restaurante del pedido')
   }
 
+  if (!hasAvailableOrderTypes.value) {
+    throw new Error('Este restaurante no tiene modalidades de pedido habilitadas')
+  }
+
   const details = [formData.value.address, formData.value.city, formData.value.postalcode]
     .filter(Boolean)
     .join(', ')
-  const notes = details
-    ? `Tipo de consumo: ${formData.value.orderType === 'takeaway' ? 'Para llevar' : 'Consumir en local'}. Referencia: ${details}`
-    : `Tipo de consumo: ${formData.value.orderType === 'takeaway' ? 'Para llevar' : 'Consumir en local'}`
+  const isTakeaway = formData.value.orderType === 'takeaway'
+  const isLocal = formData.value.orderType === 'local'
+  const isPickup = formData.value.orderType === 'pickup'
+
+  if (isTakeaway && !details.trim()) {
+    throw new Error('Introduce una dirección para pedidos para llevar')
+  }
+
+  if (isLocal && !String(formData.value.tableNumber || '').trim()) {
+    throw new Error('Introduce un número de mesa para consumir en local')
+  }
+
+  if (isPickup && !String(formData.value.pickupName || '').trim()) {
+    throw new Error('Introduce el nombre de quien recogerá el pedido')
+  }
+
+  const serviceMode = isLocal ? 'local' : (isPickup ? 'pickup' : 'takeaway')
+
+  let notes = ''
+  if (isTakeaway) {
+    notes = `Tipo de consumo: Para llevar. Referencia: ${details}`
+  } else if (isPickup) {
+    notes = `Tipo de consumo: Recoger en local. Nombre: ${String(formData.value.pickupName).trim()}`
+  } else {
+    notes = `Tipo de consumo: Consumir en local. Mesa: ${String(formData.value.tableNumber).trim()}`
+  }
 
   const orderResponse = await fetch('/api/orders', {
     method: 'POST',
@@ -267,9 +354,13 @@ async function createOrderWithItems() {
     body: JSON.stringify({
       restaurant_id: restaurantId,
       user_id: auth.user?.id || null,
-      type: formData.value.orderType === 'takeaway' ? 'delivery' : 'local',
+      type: isLocal ? 'local' : 'delivery',
+      service_mode: serviceMode,
       status: 'pending',
       total: totalAmount.value,
+      delivery_address: isTakeaway
+        ? details
+        : (isPickup ? `Recoger en local · Nombre: ${String(formData.value.pickupName).trim()}` : null),
       notes
     })
   })
@@ -330,143 +421,8 @@ async function createTestPayment(orderId) {
   }
 }
 
-async function initStripeElements() {
-  if (stripePublicKeyMissing.value) {
-    throw new Error('Stripe no está configurado en el frontend')
-  }
-
-  if (!stripe.value) {
-    stripe.value = await loadStripe(stripePublicKey)
-  }
-
-  if (!stripe.value) {
-    throw new Error('No se pudo inicializar Stripe')
-  }
-
-  if (!stripeElements.value) {
-    stripeElements.value = stripe.value.elements()
-  }
-
-  await nextTick()
-
-  if (!stripeCardElement.value) {
-    stripeCardElement.value = stripeElements.value.create('card', {
-      hidePostalCode: true,
-      style: {
-        base: {
-          fontSize: '16px',
-          color: '#2c3e50',
-          '::placeholder': {
-            color: '#95a5a6'
-          }
-        }
-      }
-    })
-  }
-
-  if (cardElementRef.value && !cardElementRef.value.hasChildNodes()) {
-    stripeCardElement.value.mount(cardElementRef.value)
-  }
-}
-
-function destroyStripeElement() {
-  if (stripeCardElement.value) {
-    stripeCardElement.value.unmount()
-  }
-}
-
-async function startStripePayment(orderId) {
-  await initStripeElements()
-
-  if (!stripeCardElement.value) {
-    throw new Error('No se pudo inicializar el formulario de tarjeta')
-  }
-
-  const response = await fetch(`/api/orders/${orderId}/payments/stripe`, {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${auth.token}`,
-      'Content-Type': 'application/json',
-      'Accept': 'application/json'
-    },
-    body: JSON.stringify({
-      amount: totalAmount.value,
-      currency: 'eur'
-    })
-  })
-
-  const contentType = response.headers.get('content-type') || ''
-  const data = contentType.includes('application/json') ? await response.json() : null
-
-  if (!response.ok) {
-    throw new Error(data?.message || 'No se pudo iniciar el pago con Stripe')
-  }
-
-  stripeClientSecret.value = data?.client_secret || null
-
-  if (!stripeClientSecret.value) {
-    throw new Error('Stripe no devolvió client_secret')
-  }
-
-  const { error: stripeError, paymentIntent } = await stripe.value.confirmCardPayment(
-    stripeClientSecret.value,
-    {
-      payment_method: {
-        card: stripeCardElement.value,
-        billing_details: {
-          name: formData.value.cardName
-        }
-      }
-    }
-  )
-
-  if (stripeError) {
-    throw new Error(stripeError.message || 'No se pudo confirmar el pago con Stripe')
-  }
-
-  if (!paymentIntent || paymentIntent.status !== 'succeeded') {
-    throw new Error('El pago no fue completado por Stripe')
-  }
-
-  orderNumber.value = String(orderId)
-}
-
-async function createCashPayment(orderId) {
-  const response = await fetch(`/api/orders/${orderId}/payments/cash`, {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${auth.token}`,
-      'Content-Type': 'application/json',
-      'Accept': 'application/json'
-    },
-    body: JSON.stringify({
-      amount: totalAmount.value,
-      currency: 'eur'
-    })
-  })
-
-  const contentType = response.headers.get('content-type') || ''
-  const data = contentType.includes('application/json') ? await response.json() : null
-
-  if (!response.ok) {
-    throw new Error(data?.message || 'No se pudo crear el pago en efectivo')
-  }
-}
-
-watch(() => formData.value.paymentMethod, async (method) => {
-  if (method === 'card') {
-    try {
-      await initStripeElements()
-    } catch (err) {
-      error.value = err.message
-    }
-  } else {
-    destroyStripeElement()
-  }
-})
-
-onBeforeUnmount(() => {
-  destroyStripeElement()
+onMounted(() => {
+  fetchRestaurantServiceOptions()
 })
 </script>
 
@@ -577,29 +533,14 @@ onBeforeUnmount(() => {
   margin: 0;
 }
 
-.card-form {
-  margin-top: 1rem;
-  padding: 1rem;
-  background: #f8f9fa;
-  border-radius: 5px;
-}
-
-.stripe-card-element {
-  background: white;
-  border: 2px solid #ecf0f1;
-  border-radius: 5px;
+.payment-warning {
+  margin-top: 0.6rem;
   padding: 0.75rem;
-  min-height: 44px;
-}
-
-.stripe-hint {
-  margin: 0.75rem 0 0;
-  color: #7f8c8d;
-  font-size: 0.9rem;
-}
-
-.stripe-error {
-  color: #c0392b;
+  border-radius: 6px;
+  background: #fff7e6;
+  color: #9a6700;
+  border: 1px solid #f3d9a3;
+  font-size: 0.92rem;
 }
 
 .error-message {

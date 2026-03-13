@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\AuditLog;
 use App\Models\Restaurant;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Builder;
@@ -12,6 +13,33 @@ use Illuminate\Routing\Controller as BaseController;
 class Controller extends BaseController
 {
     use AuthorizesRequests, ValidatesRequests;
+
+    protected function auditAction(
+        ?User $actor,
+        string $action,
+        ?string $resourceType = null,
+        null|string|int $resourceId = null,
+        ?User $targetUser = null,
+        array $metadata = [],
+        ?string $ipAddress = null,
+        ?string $userAgent = null
+    ): void {
+        try {
+            AuditLog::create([
+                'actor_user_id' => $actor?->id,
+                'target_user_id' => $targetUser?->id,
+                'action' => $action,
+                'resource_type' => $resourceType,
+                'resource_id' => $resourceId !== null ? (string) $resourceId : null,
+                'ip_address' => $ipAddress,
+                'user_agent' => $userAgent,
+                'metadata' => $metadata,
+                'created_at' => now(),
+            ]);
+        } catch (\Throwable $exception) {
+            // Do not block primary flow if audit storage fails.
+        }
+    }
 
     protected function managedRestaurantIds(?User $user): array
     {

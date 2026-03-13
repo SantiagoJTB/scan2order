@@ -25,6 +25,8 @@ class User extends Authenticatable
         'role_id',
         'created_by',
         'status',
+        'mfa_secret',
+        'mfa_enabled_at',
     ];
 
     /**
@@ -35,6 +37,7 @@ class User extends Authenticatable
     protected $hidden = [
         'password',
         'remember_token',
+        'mfa_secret',
     ];
 
     /**
@@ -45,6 +48,7 @@ class User extends Authenticatable
     protected $casts = [
         'email_verified_at' => 'datetime',
         'password' => 'hashed',
+        'mfa_enabled_at' => 'datetime',
     ];
 
     /**
@@ -124,7 +128,7 @@ class User extends Authenticatable
      */
     public function hasPermission($permissionName)
     {
-        return $this->permissions()->where('name', $permissionName)->exists();
+        return $this->permissions()->contains('name', $permissionName);
     }
 }
 

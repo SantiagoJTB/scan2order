@@ -130,7 +130,7 @@ test('flujo real: cocina -> caja -> informes con datos persistidos', async ({ pa
 
   await page.goto(`/caja/${restaurantId}`)
   await expect(page.getByRole('heading', { name: `Orden #${order.id}` })).toBeVisible()
-  await page.getByRole('button', { name: 'Marcar como cobrada' }).click()
+  await page.getByRole('button', { name: 'Efectivo' }).click()
   await expect(page.getByText('No hay órdenes pendientes de pago en este momento.')).toBeVisible()
   await page.getByRole('button', { name: '📋 Ver historial del día' }).click()
   await expect(page.getByRole('heading', { name: `Orden #${order.id}` })).toBeVisible()

@@ -5,7 +5,7 @@
         <router-link v-if="!isRestaurantFocusView" to="/" class="brand-link">
           <h1>Scan2Order</h1>
         </router-link>
-        <span v-else class="brand-secondary">Experiencia del restaurante</span>
+        <span v-else class="brand-secondary">{{ restaurantBrandName }}</span>
         <span class="role-badge">{{ auth.userRole }}</span>
       </div>
       <ul class="nav-links">
@@ -17,6 +17,7 @@
         <li v-if="isStaff"><router-link :to="staffDashboardRoute">Panel Staff</router-link></li>
         
         <li v-if="canAccessAdmin"><router-link to="/admin">Panel Admin</router-link></li>
+        <li v-if="isSuperadmin"><router-link to="/admin/security">Seguridad</router-link></li>
         
         <li class="user-menu">
           <button @click="showUserMenu = !showUserMenu" class="user-btn">
@@ -47,7 +48,9 @@ const cart = useCartStore()
 const router = useRouter()
 const route = useRoute()
 const showUserMenu = ref(false)
+const restaurantBrandName = ref('Restaurante')
 const canAccessAdmin = computed(() => auth.hasAnyRole(['admin', 'superadmin']))
+const isSuperadmin = computed(() => auth.hasRole('superadmin'))
 const isCliente = computed(() => auth.hasRole('cliente'))
 const isStaff = computed(() => auth.hasRole('staff'))
 const staffDashboardRoute = computed(() => {
@@ -56,6 +59,31 @@ const staffDashboardRoute = computed(() => {
 })
 const isRestaurantFocusView = computed(() => route.name === 'RestaurantMenu')
 
+async function fetchRestaurantBrandName(restaurantId) {
+  if (!restaurantId) {
+    restaurantBrandName.value = 'Restaurante'
+    return
+  }
+
+  try {
+    const response = await fetch(`/api/restaurants/${restaurantId}`, {
+      headers: {
+        Accept: 'application/json'
+      }
+    })
+
+    if (!response.ok) {
+      restaurantBrandName.value = 'Restaurante'
+      return
+    }
+
+    const data = await response.json()
+    restaurantBrandName.value = data?.name || 'Restaurante'
+  } catch {
+    restaurantBrandName.value = 'Restaurante'
+  }
+}
+
 onMounted(async () => {
   await auth.initFromStorage()
 })
@@ -63,6 +91,19 @@ onMounted(async () => {
 watch(() => router.currentRoute.value.name, () => {
   showUserMenu.value = false
 })
+
+watch(
+  () => [route.name, route.params.id],
+  ([name, restaurantId]) => {
+    if (name === 'RestaurantMenu') {
+      fetchRestaurantBrandName(restaurantId)
+      return
+    }
+
+    restaurantBrandName.value = 'Restaurante'
+  },
+  { immediate: true }
+)
 
 async function logout() {
   await auth.logout()

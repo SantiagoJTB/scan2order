@@ -30,10 +30,11 @@ class RolePermissionSeeder extends Seeder
             'manage_tables' => 'Gestionar mesas',
             'view_reports' => 'Ver reportes',
 
-            // Staff permissions (caja + cocina + menu)
+            // Staff permissions (caja + cocina + ocultar productos)
             'manage_payments' => 'Gestionar pagos',
             'manage_orders' => 'Gestionar órdenes',
             'view_orders' => 'Ver órdenes',
+            'hide_products_from_menu' => 'Ocultar/mostrar productos de la carta',
 
             // Cliente permissions
             'place_order' => 'Realizar orden',
@@ -65,7 +66,7 @@ class RolePermissionSeeder extends Seeder
             'manage_payments',
             'manage_orders',
             'view_orders',
-            'manage_products',
+            'hide_products_from_menu',
         ])->get();
         $staff->permissions()->sync($staffPerms);
 

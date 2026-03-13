@@ -11,6 +11,15 @@ use Illuminate\Support\Facades\Log;
 
 class RestaurantController extends Controller
 {
+    private function hasAtLeastOneServiceEnabled(array $data, ?Restaurant $restaurant = null): bool
+    {
+        $local = (bool) ($data['service_local_enabled'] ?? $restaurant?->service_local_enabled ?? true);
+        $takeaway = (bool) ($data['service_takeaway_enabled'] ?? $restaurant?->service_takeaway_enabled ?? true);
+        $pickup = (bool) ($data['service_pickup_enabled'] ?? $restaurant?->service_pickup_enabled ?? true);
+
+        return $local || $takeaway || $pickup;
+    }
+
     public function index(Request $request)
     {
         $currentUser = auth('sanctum')->user();
@@ -55,7 +64,14 @@ class RestaurantController extends Controller
             'address' => 'nullable|string',
             'phone' => 'nullable|string',
             'active' => 'boolean',
+            'service_local_enabled' => 'boolean',
+            'service_takeaway_enabled' => 'boolean',
+            'service_pickup_enabled' => 'boolean',
         ]);
+
+        if (!$this->hasAtLeastOneServiceEnabled($data)) {
+            return response()->json(['message' => 'Debes habilitar al menos una opción de servicio'], 422);
+        }
 
         $data['created_by'] = $user->id;
 
@@ -139,7 +155,14 @@ class RestaurantController extends Controller
             'address' => 'nullable|string',
             'phone' => 'nullable|string',
             'active' => 'boolean',
+            'service_local_enabled' => 'boolean',
+            'service_takeaway_enabled' => 'boolean',
+            'service_pickup_enabled' => 'boolean',
         ]);
+
+        if (!$this->hasAtLeastOneServiceEnabled($data, $restaurant)) {
+            return response()->json(['message' => 'Debes habilitar al menos una opción de servicio'], 422);
+        }
 
         try {
             $restaurant->update($data);

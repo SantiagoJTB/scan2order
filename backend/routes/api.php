@@ -8,6 +8,7 @@ use App\Http\Controllers\RestaurantController;
 use App\Http\Controllers\ProductController;
 use App\Http\Controllers\OrderController;
 use App\Http\Controllers\CategoryController;
+use App\Http\Controllers\SecurityOverviewController;
 use App\Http\Controllers\TableController;
 use App\Http\Controllers\PaymentController;
 use App\Http\Controllers\OrderItemController;
@@ -29,14 +30,19 @@ Route::get('/hello', function () {
 });
 
 // Auth routes (public)
-Route::post('/login', [AuthController::class, 'login']);
+Route::post('/login', [AuthController::class, 'login'])->middleware('throttle:auth-login');
 Route::post('/register', [AuthController::class, 'register']);
+Route::post('/forgot-password', [AuthController::class, 'forgotPassword'])->middleware('throttle:auth-forgot-password');
+Route::post('/reset-password', [AuthController::class, 'resetPassword'])->middleware('throttle:auth-reset-password');
 Route::post('/webhooks/stripe', [PaymentController::class, 'handleStripeWebhook']);
 
 // Protected auth routes
 Route::middleware('auth:sanctum')->group(function () {
     Route::post('/logout', [AuthController::class, 'logout']);
     Route::get('/me', [AuthController::class, 'me']);
+    Route::post('/mfa/setup', [AuthController::class, 'mfaSetup'])->middleware('throttle:auth-mfa-setup');
+    Route::post('/mfa/enable', [AuthController::class, 'mfaEnable'])->middleware('throttle:auth-mfa-verify');
+    Route::post('/mfa/disable', [AuthController::class, 'mfaDisable'])->middleware('throttle:auth-mfa-verify');
 });
 
 // User management (protected)
@@ -102,4 +108,6 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/orders/{orderId}/payments/cash', [PaymentController::class, 'createCashPayment']);
     Route::post('/orders/{orderId}/payments/test', [PaymentController::class, 'createTestPayment']);
     Route::get('/payments/{payment}', [PaymentController::class, 'show']);
+
+    Route::get('/admin/security/overview', [SecurityOverviewController::class, 'index']);
 });

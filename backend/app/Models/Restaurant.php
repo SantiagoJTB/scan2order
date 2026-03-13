@@ -9,7 +9,23 @@ class Restaurant extends Model
 {
     use HasFactory;
 
-    protected $fillable = ['name', 'address', 'phone', 'active', 'created_by'];
+    protected $fillable = [
+        'name',
+        'address',
+        'phone',
+        'active',
+        'created_by',
+        'service_local_enabled',
+        'service_takeaway_enabled',
+        'service_pickup_enabled',
+    ];
+
+    protected $casts = [
+        'active' => 'boolean',
+        'service_local_enabled' => 'boolean',
+        'service_takeaway_enabled' => 'boolean',
+        'service_pickup_enabled' => 'boolean',
+    ];
 
     public function creator()
     {

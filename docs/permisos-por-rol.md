@@ -1,6 +1,6 @@
 # Matriz de permisos por rol
 
-Última actualización: 12-03-2026
+Última actualización: 13-03-2026
 
 ## Alcance
 
@@ -183,7 +183,9 @@ Fuente: `backend/app/Http/Controllers/ProductController.php`
 |---|---:|---:|---:|---:|
 | Ver stats restaurantes (`GET /api/restaurants/stats`) | ✅ | ✅ ámbito | ✅ ámbito | ❌ |
 | Ver catálogos (`GET /api/restaurants/{id}/catalogs`) | ✅ | ✅ ámbito | ✅ ámbito | ✅ solo restaurante activo |
-| Crear/editar/eliminar catálogo, sección, producto | ✅ | ✅ ámbito | ✅ ámbito | ❌ |
+| Crear/editar/eliminar catálogo y sección | ✅ | ✅ ámbito | ❌ | ❌ |
+| Crear/editar/eliminar producto | ✅ | ✅ ámbito | ❌ | ❌ |
+| Ocultar/mostrar producto (`active`) | ✅ | ✅ ámbito | ✅ ámbito (solo `active`) | ❌ |
 
 ---
 

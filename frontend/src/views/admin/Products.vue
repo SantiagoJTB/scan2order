@@ -4,11 +4,11 @@
 
     <div class="header">
       <h1>📋 Gestión de Catálogos y Productos</h1>
-      <button v-if="selectedRestaurantId" @click="backToList" class="btn-back">← Volver a lista</button>
+      <button v-if="selectedRestaurantId && !isStaff" @click="backToList" class="btn-back">← Volver a lista</button>
     </div>
 
     <!-- Restaurant List View -->
-    <div v-if="!selectedRestaurantId" class="restaurants-stats">
+    <div v-if="!selectedRestaurantId && !isStaff" class="restaurants-stats">
       <div v-if="isLoadingStats" class="loading">Cargando restaurantes...</div>
       <div v-else-if="restaurantsStats.length === 0" class="empty-state">
         <p>No hay restaurantes disponibles</p>
@@ -62,7 +62,7 @@
       <div class="catalogs-list">
         <div v-if="catalogs.length === 0" class="empty-section">
           <p>No hay catálogos creados</p>
-          <button class="btn-primary" @click="openCatalogForm()">+ Crear primer catálogo</button>
+          <button v-if="!isStaff" class="btn-primary" @click="openCatalogForm()">+ Crear primer catálogo</button>
         </div>
 
         <div v-else-if="filteredCatalogs.length === 0" class="empty-section">
@@ -76,53 +76,62 @@
               <p>{{ catalog.description || 'Sin descripción' }}</p>
             </div>
             <div class="catalog-actions">
-              <button class="btn-icon" @click="openPriceAdjustModal(catalog)" title="Ajustar precios por porcentaje">💹</button>
-              <button class="btn-icon" @click="editCatalog(catalog)" title="Editar">✏️</button>
-              <button class="btn-icon btn-danger" @click="deleteCatalog(catalog)" title="Eliminar">🗑️</button>
+              <button v-if="!isStaff" class="btn-icon" @click="openPriceAdjustModal(catalog)" title="Ajustar precios por porcentaje">💹</button>
+              <button v-if="!isStaff" class="btn-icon" @click="editCatalog(catalog)" title="Editar">✏️</button>
+              <button v-if="!isStaff" class="btn-icon btn-danger" @click="deleteCatalog(catalog)" title="Eliminar">🗑️</button>
             </div>
           </div>
 
           <div class="sections-container">
             <div v-if="catalog.sections.length === 0" class="empty-subsection">
               <small>Sin secciones</small>
-              <button class="btn-small" @click="openSectionForm(catalog)">+ Sección</button>
+              <button v-if="!isStaff" class="btn-small" @click="openSectionForm(catalog)">+ Sección</button>
             </div>
 
             <div v-for="section in catalog.sections" :key="section.id" class="section-item">
               <div class="section-header">
                 <h4>{{ section.name }}</h4>
                 <div class="section-actions">
-                  <button class="btn-icon" @click="editSection(catalog, section)" title="Editar">✏️</button>
-                  <button class="btn-icon btn-danger" @click="deleteSection(catalog, section)" title="Eliminar">🗑️</button>
+                  <button v-if="!isStaff" class="btn-icon" @click="editSection(catalog, section)" title="Editar">✏️</button>
+                  <button v-if="!isStaff" class="btn-icon btn-danger" @click="deleteSection(catalog, section)" title="Eliminar">🗑️</button>
                 </div>
               </div>
 
               <div class="products-list">
                 <div v-if="section.products.length === 0" class="empty-products">
                   <small>Sin productos</small>
-                  <button class="btn-small" @click="openProductForm(catalog, section)">+ Producto</button>
+                  <button v-if="!isStaff" class="btn-small" @click="openProductForm(catalog, section)">+ Producto</button>
                 </div>
 
-                <div v-for="product in section.products" :key="product.id" class="product-item">
+                <div v-for="product in section.products" :key="product.id" :class="['product-item', { 'product-item-inactive': !product.active }]">
                   <img v-if="product.image" :src="`/storage/${product.image}`" alt="" class="product-thumbnail" />
                   <div v-else class="product-no-image">📦</div>
                   <div class="product-name">{{ product.name }}</div>
                   <div class="product-price">${{ product.price }}</div>
                   <div class="product-actions">
-                    <button class="btn-icon-small" @click="editProduct(catalog, section, product)" title="Editar">✏️</button>
-                    <button class="btn-icon-small btn-danger" @click="deleteProduct(catalog, section, product)" title="Eliminar">🗑️</button>
+                    <button
+                      v-if="isStaff"
+                      :class="['btn-visibility-toggle', product.active ? 'is-active' : 'is-hidden']"
+                      :title="product.active ? 'Ocultar producto' : 'Mostrar producto'"
+                      @click="toggleProductVisibility(catalog, section, product)"
+                    >
+                      <span class="toggle-dot"></span>
+                      <span>{{ product.active ? 'Ocultar' : 'Mostrar' }}</span>
+                    </button>
+                    <button v-else class="btn-icon-small" @click="editProduct(catalog, section, product)" title="Editar">✏️</button>
+                    <button v-if="!isStaff" class="btn-icon-small btn-danger" @click="deleteProduct(catalog, section, product)" title="Eliminar">🗑️</button>
                   </div>
                 </div>
 
-                <button class="btn-add-product" @click="openProductForm(catalog, section)">+ Agregar producto</button>
+                <button v-if="!isStaff" class="btn-add-product" @click="openProductForm(catalog, section)">+ Agregar producto</button>
               </div>
             </div>
 
-            <button class="btn-add-section" @click="openSectionForm(catalog)">+ Agregar sección</button>
+            <button v-if="!isStaff" class="btn-add-section" @click="openSectionForm(catalog)">+ Agregar sección</button>
           </div>
         </div>
 
-        <button class="btn-primary btn-large" @click="openCatalogForm()">+ Crear nuevo catálogo</button>
+        <button v-if="!isStaff" class="btn-primary btn-large" @click="openCatalogForm()">+ Crear nuevo catálogo</button>
       </div>
     </div>
     </div>
@@ -270,6 +279,11 @@ const route = useRoute()
 const router = useRouter()
 
 const canAccessAdmin = computed(() => auth.hasAnyRole(['admin', 'superadmin', 'staff']))
+const isStaff = computed(() => auth.hasRole('staff'))
+const assignedStaffRestaurantId = computed(() => {
+  const id = Number(auth.staffRestaurantId || 0)
+  return Number.isFinite(id) && id > 0 ? id : null
+})
 const checkingAccess = ref(true)
 const selectedRestaurantId = ref(null)
 const selectedRestaurantName = ref('')
@@ -353,6 +367,31 @@ onMounted(async () => {
     return
   }
 
+  if (isStaff.value) {
+    if (!assignedStaffRestaurantId.value) {
+      showToast('No tienes un restaurante asignado para gestionar menús', 'error')
+      checkingAccess.value = false
+      return
+    }
+
+    selectedRestaurantId.value = assignedStaffRestaurantId.value
+    selectedRestaurantName.value = auth.user?.restaurant_name || route.query.restaurantName || ''
+
+    if (Number(route.query.restaurantId || 0) !== assignedStaffRestaurantId.value) {
+      router.replace({
+        path: '/admin/products',
+        query: {
+          restaurantId: assignedStaffRestaurantId.value,
+          restaurantName: selectedRestaurantName.value,
+        },
+      })
+    }
+
+    await fetchCatalogs()
+    checkingAccess.value = false
+    return
+  }
+
   selectedRestaurantId.value = route.query.restaurantId
   selectedRestaurantName.value = route.query.restaurantName || ''
 
@@ -392,6 +431,8 @@ async function fetchRestaurantsStats() {
 }
 
 function selectRestaurant(restaurant) {
+  if (isStaff.value) return
+
   selectedRestaurantId.value = restaurant.id
   selectedRestaurantName.value = restaurant.name
   router.push({ 
@@ -405,6 +446,8 @@ function selectRestaurant(restaurant) {
 }
 
 function backToList() {
+  if (isStaff.value) return
+
   selectedRestaurantId.value = null
   selectedRestaurantName.value = ''
   searchQuery.value = ''
@@ -439,6 +482,11 @@ async function fetchCatalogs() {
 }
 
 function openCatalogForm(catalog = null) {
+  if (isStaff.value) {
+    showToast('Staff no puede gestionar catálogos', 'error')
+    return
+  }
+
   if (catalog && catalog.id) {
     editingCatalog.value = catalog
     catalogForm.value = { 
@@ -460,6 +508,11 @@ function closeCatalogModal() {
 }
 
 async function saveCatalog() {
+  if (isStaff.value) {
+    showToast('Staff no puede modificar catálogos', 'error')
+    return
+  }
+
   try {
     if (!selectedRestaurantId.value) {
       throw new Error('Selecciona un restaurante antes de guardar el catálogo')
@@ -501,6 +554,11 @@ async function saveCatalog() {
 }
 
 async function deleteCatalog(catalog) {
+  if (isStaff.value) {
+    showToast('Staff no puede eliminar catálogos', 'error')
+    return
+  }
+
   if (!confirm('¿Eliminar este catálogo y todos sus contenidos?')) return
   try {
     const response = await fetch(`/api/restaurants/${selectedRestaurantId.value}/catalogs/${catalog.id}`, {
@@ -516,6 +574,11 @@ async function deleteCatalog(catalog) {
 }
 
 function openSectionForm(catalog, section = null) {
+  if (isStaff.value) {
+    showToast('Staff no puede gestionar secciones', 'error')
+    return
+  }
+
   selectedCatalog.value = catalog
   if (section) {
     editingSection.value = section
@@ -539,6 +602,11 @@ function closeSectionModal() {
 }
 
 async function saveSection() {
+  if (isStaff.value) {
+    showToast('Staff no puede modificar secciones', 'error')
+    return
+  }
+
   try {
     const url = editingSection.value
       ? `/api/restaurants/${selectedRestaurantId.value}/catalogs/${selectedCatalog.value.id}/sections/${editingSection.value.id}`
@@ -568,6 +636,11 @@ function editSection(catalog, section) {
 }
 
 async function deleteSection(catalog, section) {
+  if (isStaff.value) {
+    showToast('Staff no puede eliminar secciones', 'error')
+    return
+  }
+
   if (!confirm('¿Eliminar esta sección?')) return
   try {
     const response = await fetch(`/api/restaurants/${selectedRestaurantId.value}/catalogs/${catalog.id}/sections/${section.id}`, {
@@ -637,6 +710,11 @@ function removeImage() {
 }
 
 async function saveProduct() {
+  if (isStaff.value) {
+    showToast('Staff no puede crear ni editar productos', 'error')
+    return
+  }
+
   try {
     const url = editingProduct.value
       ? `/api/restaurants/${selectedRestaurantId.value}/catalogs/${selectedCatalog.value.id}/sections/${selectedSection.value.id}/products/${editingProduct.value.id}`
@@ -682,10 +760,20 @@ async function saveProduct() {
 }
 
 function editProduct(catalog, section, product) {
+  if (isStaff.value) {
+    showToast('Staff no puede editar productos', 'error')
+    return
+  }
+
   openProductForm(catalog, section, product)
 }
 
 async function deleteProduct(catalog, section, product) {
+  if (isStaff.value) {
+    showToast('Staff no puede eliminar productos', 'error')
+    return
+  }
+
   if (!confirm('¿Eliminar este producto?')) return
   try {
     const response = await fetch(`/api/restaurants/${selectedRestaurantId.value}/catalogs/${catalog.id}/sections/${section.id}/products/${product.id}`, {
@@ -695,6 +783,27 @@ async function deleteProduct(catalog, section, product) {
     if (!response.ok) throw new Error('Error al eliminar')
     await fetchCatalogs()
     showToast('Producto eliminado')
+  } catch (err) {
+    showToast(err.message, 'error')
+  }
+}
+
+async function toggleProductVisibility(catalog, section, product) {
+  try {
+    const response = await fetch(`/api/restaurants/${selectedRestaurantId.value}/catalogs/${catalog.id}/sections/${section.id}/products/${product.id}`, {
+      method: 'PUT',
+      headers: {
+        'Authorization': `Bearer ${auth.token}`,
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'
+      },
+      body: JSON.stringify({ active: !product.active })
+    })
+
+    if (!response.ok) throw new Error('No se pudo actualizar visibilidad del producto')
+
+    await fetchCatalogs()
+    showToast(product.active ? 'Producto ocultado de la carta' : 'Producto visible en la carta')
   } catch (err) {
     showToast(err.message, 'error')
   }
@@ -716,6 +825,11 @@ function closePriceAdjustModal() {
 }
 
 async function applyCatalogPriceAdjustment() {
+  if (isStaff.value) {
+    showToast('Staff no puede modificar precios', 'error')
+    return
+  }
+
   const catalog = selectedCatalogForPrice.value
   const percent = Number(priceAdjustForm.value.percent)
 
@@ -1057,6 +1171,12 @@ async function applyCatalogPriceAdjustment() {
   gap: 0.75rem;
 }
 
+.product-item-inactive {
+  opacity: 0.8;
+  background: #f5f7fa;
+  border-color: #dbe1e8;
+}
+
 .product-thumbnail {
   width: 40px;
   height: 40px;
@@ -1092,6 +1212,37 @@ async function applyCatalogPriceAdjustment() {
 .product-actions {
   display: flex;
   gap: 0.25rem;
+}
+
+.btn-visibility-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  padding: 0.2rem 0.55rem;
+  font-size: 0.75rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.btn-visibility-toggle .toggle-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.btn-visibility-toggle.is-active {
+  background: #e9f9ef;
+  color: #1f8a4d;
+  border-color: #bde8cc;
+}
+
+.btn-visibility-toggle.is-hidden {
+  background: #fdf2f2;
+  color: #b63b3b;
+  border-color: #f3c5c5;
 }
 
 .btn-icon {
