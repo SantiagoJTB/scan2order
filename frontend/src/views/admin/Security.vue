@@ -14,6 +14,39 @@
 
     <div v-else>
       <div v-if="error" class="error-box">{{ error }}</div>
+      <div v-if="actionMessage" class="success-box">{{ actionMessage }}</div>
+
+      <div class="content emergency-wrapper">
+        <div class="table-header-row">
+          <h2>Protocolo de emergencia</h2>
+          <button class="btn-refresh" @click="fetchHealth" :disabled="isActionLoading">
+            {{ isActionLoading ? 'Procesando...' : 'Verificar estado ahora' }}
+          </button>
+        </div>
+        <p class="emergency-help">
+          Si ocurre un incidente, registra la activación del protocolo y ejecuta verificación de contingencia.
+          Ambas acciones quedarán auditadas en este panel.
+        </p>
+
+        <div class="health-grid" v-if="healthCheck">
+          <div class="health-pill" :class="healthCheck.ok ? 'ok' : 'degraded'">
+            Estado general: {{ healthCheck.ok ? 'OK' : 'DEGRADADO' }}
+          </div>
+          <div class="health-item">BD: <strong>{{ healthCheck.database ? 'OK' : 'FALLA' }}</strong></div>
+          <div class="health-item">Storage: <strong>{{ healthCheck.storage ? 'OK' : 'FALLA' }}</strong></div>
+          <div class="health-item">Scheduler: <strong>{{ healthCheck.scheduler_signal ? 'SEÑAL' : 'SIN SEÑAL' }}</strong></div>
+          <div class="health-item">Revisión: <strong>{{ formatDate(healthCheck.checked_at) }}</strong></div>
+        </div>
+
+        <div class="emergency-actions">
+          <button class="btn-danger" :disabled="isActionLoading" @click="askConfirm('activate_protocol')">
+            Activar protocolo de emergencia
+          </button>
+          <button class="btn-warning" :disabled="isActionLoading" @click="askConfirm('run_contingency_check')">
+            Ejecutar verificación de contingencia
+          </button>
+        </div>
+      </div>
 
       <div class="summary-grid" v-if="summary">
         <div class="stat-card">
@@ -93,6 +126,30 @@
           </tbody>
         </table>
       </div>
+
+      <div v-if="showConfirmModal" class="modal-overlay">
+        <div class="modal">
+          <div class="modal-header">
+            <h2>Confirmar acción crítica</h2>
+            <button class="btn-close" @click="cancelConfirm">×</button>
+          </div>
+          <div class="modal-body">
+            <p>{{ confirmMessage }}</p>
+            <label class="confirm-reason-label">Motivo (opcional):</label>
+            <textarea v-model="confirmReason" rows="3" placeholder="Describe brevemente el incidente o motivo"></textarea>
+            <div class="confirm-check">
+              <input id="confirm-check" v-model="confirmChecked" type="checkbox" />
+              <label for="confirm-check">Sí, confirmar esta acción</label>
+            </div>
+            <div class="modal-actions">
+              <button class="btn-cancel" @click="cancelConfirm" :disabled="isActionLoading">Cancelar</button>
+              <button class="btn-danger" @click="executeConfirmedAction" :disabled="isActionLoading || !confirmChecked">
+                {{ isActionLoading ? 'Procesando...' : 'Confirmar' }}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 </template>
@@ -109,10 +166,27 @@ const error = ref('')
 const summary = ref(null)
 const events = ref([])
 const availableActions = ref([])
+const actionMessage = ref('')
+const healthCheck = ref(null)
+const isActionLoading = ref(false)
+const showConfirmModal = ref(false)
+const confirmChecked = ref(false)
+const confirmReason = ref('')
+const pendingAction = ref('')
 const filters = ref({
   action: '',
   from: '',
   to: '',
+})
+
+const confirmMessage = computed(() => {
+  if (pendingAction.value === 'activate_protocol') {
+    return 'Vas a registrar la activación del protocolo de emergencia. Esta acción quedará auditada.'
+  }
+  if (pendingAction.value === 'run_contingency_check') {
+    return 'Vas a ejecutar una verificación de contingencia del sistema y registrarla en auditoría.'
+  }
+  return 'Confirma la acción.'
 })
 
 function formatDate(value) {
@@ -162,6 +236,86 @@ async function fetchOverview() {
   }
 }
 
+async function fetchHealth() {
+  if (!isSuperadmin.value) return
+
+  isActionLoading.value = true
+  error.value = ''
+
+  try {
+    const response = await fetch('/api/admin/security/health', {
+      headers: {
+        Accept: 'application/json',
+        ...(auth.token ? { Authorization: `Bearer ${auth.token}` } : {}),
+      },
+    })
+
+    const data = await response.json()
+    if (!response.ok) {
+      throw new Error(data?.message || 'No se pudo verificar el estado')
+    }
+
+    healthCheck.value = data.check || null
+  } catch (err) {
+    error.value = err.message || 'No se pudo verificar el estado'
+  } finally {
+    isActionLoading.value = false
+  }
+}
+
+function askConfirm(action) {
+  pendingAction.value = action
+  confirmReason.value = ''
+  confirmChecked.value = false
+  showConfirmModal.value = true
+}
+
+function cancelConfirm() {
+  showConfirmModal.value = false
+  pendingAction.value = ''
+  confirmReason.value = ''
+  confirmChecked.value = false
+}
+
+async function executeConfirmedAction() {
+  if (!pendingAction.value) return
+
+  isActionLoading.value = true
+  error.value = ''
+  actionMessage.value = ''
+
+  try {
+    const response = await fetch('/api/admin/security/emergency-action', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+        ...(auth.token ? { Authorization: `Bearer ${auth.token}` } : {}),
+      },
+      body: JSON.stringify({
+        action: pendingAction.value,
+        reason: confirmReason.value || null,
+      }),
+    })
+
+    const data = await response.json()
+    if (!response.ok) {
+      throw new Error(data?.message || 'No se pudo ejecutar la acción')
+    }
+
+    actionMessage.value = data?.message || 'Acción ejecutada correctamente'
+    if (data?.check) {
+      healthCheck.value = data.check
+    }
+    cancelConfirm()
+    await fetchOverview()
+  } catch (err) {
+    error.value = err.message || 'No se pudo ejecutar la acción'
+  } finally {
+    isActionLoading.value = false
+  }
+}
+
 function clearFilters() {
   filters.value = {
     action: '',
@@ -177,6 +331,7 @@ onMounted(async () => {
   }
 
   await fetchOverview()
+  await fetchHealth()
 })
 </script>
 
@@ -247,6 +402,157 @@ onMounted(async () => {
   border-radius: 8px;
   padding: 0.9rem 1rem;
   margin-bottom: 1rem;
+}
+
+.success-box {
+  background: #eafaf1;
+  color: #1e7e34;
+  border-radius: 8px;
+  padding: 0.9rem 1rem;
+  margin-bottom: 1rem;
+}
+
+.emergency-wrapper {
+  margin-bottom: 1.25rem;
+}
+
+.emergency-help {
+  margin: 0.25rem 0 0.9rem;
+  color: #4b5563;
+}
+
+.health-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.health-pill {
+  grid-column: 1 / -1;
+  padding: 0.55rem 0.75rem;
+  border-radius: 8px;
+  font-weight: 700;
+}
+
+.health-pill.ok {
+  background: #e8f5e9;
+  color: #1b5e20;
+}
+
+.health-pill.degraded {
+  background: #ffebee;
+  color: #b71c1c;
+}
+
+.health-item {
+  background: #f8fafc;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 0.5rem 0.65rem;
+  color: #374151;
+}
+
+.emergency-actions {
+  display: flex;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+
+.btn-danger,
+.btn-warning,
+.btn-cancel {
+  border: none;
+  border-radius: 6px;
+  padding: 0.55rem 0.9rem;
+  color: white;
+  cursor: pointer;
+}
+
+.btn-danger {
+  background: #c0392b;
+}
+
+.btn-warning {
+  background: #d97706;
+}
+
+.btn-cancel {
+  background: #6b7280;
+}
+
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+}
+
+.modal {
+  width: min(520px, calc(100% - 2rem));
+  background: white;
+  border-radius: 10px;
+  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.2);
+  overflow: hidden;
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.9rem 1rem;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.modal-header h2 {
+  margin: 0;
+  color: #1f2937;
+  font-size: 1.05rem;
+}
+
+.btn-close {
+  border: none;
+  background: transparent;
+  color: #6b7280;
+  font-size: 1.3rem;
+  cursor: pointer;
+}
+
+.modal-body {
+  padding: 1rem;
+}
+
+.confirm-reason-label {
+  display: block;
+  margin: 0.75rem 0 0.35rem;
+  color: #374151;
+  font-weight: 600;
+}
+
+.modal-body textarea {
+  width: 100%;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  padding: 0.6rem;
+  resize: vertical;
+  box-sizing: border-box;
+}
+
+.confirm-check {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+}
+
+.modal-actions {
+  margin-top: 1rem;
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
 }
 
 .table-wrapper {

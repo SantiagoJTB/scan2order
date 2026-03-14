@@ -7,6 +7,8 @@ use App\Models\Role;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 
 class SecurityOverviewController extends Controller
 {
@@ -125,5 +127,115 @@ class SecurityOverviewController extends Controller
             ],
             'recent_events' => $recentEvents,
         ]);
+    }
+
+    public function emergencyAction(Request $request)
+    {
+        $user = $request->user();
+        $user->loadMissing('role');
+
+        if ($user->role?->name !== 'superadmin') {
+            return response()->json(['message' => 'Only superadmin can perform emergency actions'], 403);
+        }
+
+        $validated = $request->validate([
+            'action' => 'required|in:activate_protocol,run_contingency_check',
+            'reason' => 'nullable|string|max:500',
+        ]);
+
+        $action = $validated['action'];
+        $reason = trim((string) ($validated['reason'] ?? ''));
+
+        if ($action === 'activate_protocol') {
+            $metadata = [
+                'reason' => $reason !== '' ? $reason : null,
+                'performed_at' => now()->toIso8601String(),
+            ];
+
+            $this->auditAction(
+                $user,
+                'security.emergency.protocol_activated',
+                'security_panel',
+                'superadmin',
+                null,
+                $metadata,
+                $request->ip(),
+                (string) $request->userAgent()
+            );
+
+            return response()->json([
+                'message' => 'Protocolo de emergencia activado y registrado',
+                'action' => $action,
+                'metadata' => $metadata,
+            ]);
+        }
+
+        $check = $this->runContingencyCheck();
+
+        $this->auditAction(
+            $user,
+            'security.emergency.contingency_check',
+            'security_panel',
+            'superadmin',
+            null,
+            [
+                'reason' => $reason !== '' ? $reason : null,
+                'check' => $check,
+            ],
+            $request->ip(),
+            (string) $request->userAgent()
+        );
+
+        return response()->json([
+            'message' => 'Verificación de contingencia ejecutada y registrada',
+            'action' => $action,
+            'check' => $check,
+        ]);
+    }
+
+    public function health(Request $request)
+    {
+        $check = $this->runContingencyCheck();
+
+        return response()->json([
+            'status' => $check['ok'] ? 'ok' : 'degraded',
+            'check' => $check,
+        ]);
+    }
+
+    private function runContingencyCheck(): array
+    {
+        $dbOk = false;
+        $storageOk = false;
+        $schedulerSignalOk = false;
+
+        try {
+            DB::select('SELECT 1');
+            $dbOk = true;
+        } catch (\Throwable $exception) {
+            $dbOk = false;
+        }
+
+        try {
+            $disk = Storage::disk('public');
+            $probeFile = 'health/.probe';
+            $disk->put($probeFile, now()->toIso8601String());
+            $storageOk = $disk->exists($probeFile);
+            $disk->delete($probeFile);
+        } catch (\Throwable $exception) {
+            $storageOk = false;
+        }
+
+        $schedulerSignalOk = file_exists(storage_path('logs/laravel.log'));
+
+        $ok = $dbOk && $storageOk;
+
+        return [
+            'ok' => $ok,
+            'database' => $dbOk,
+            'storage' => $storageOk,
+            'scheduler_signal' => $schedulerSignalOk,
+            'checked_at' => now()->toIso8601String(),
+        ];
     }
 }
