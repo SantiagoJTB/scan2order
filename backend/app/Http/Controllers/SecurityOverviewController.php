@@ -129,71 +129,6 @@ class SecurityOverviewController extends Controller
         ]);
     }
 
-    public function emergencyAction(Request $request)
-    {
-        $user = $request->user();
-        $user->loadMissing('role');
-
-        if ($user->role?->name !== 'superadmin') {
-            return response()->json(['message' => 'Only superadmin can perform emergency actions'], 403);
-        }
-
-        $validated = $request->validate([
-            'action' => 'required|in:activate_protocol,run_contingency_check',
-            'reason' => 'nullable|string|max:500',
-            'confirmed' => 'required|accepted',
-        ]);
-
-        $action = $validated['action'];
-        $reason = trim((string) ($validated['reason'] ?? ''));
-
-        if ($action === 'activate_protocol') {
-            $metadata = [
-                'reason' => $reason !== '' ? $reason : null,
-                'performed_at' => now()->toIso8601String(),
-            ];
-
-            $this->auditAction(
-                $user,
-                'security.emergency.protocol_activated',
-                'security_panel',
-                'superadmin',
-                null,
-                $metadata,
-                $request->ip(),
-                (string) $request->userAgent()
-            );
-
-            return response()->json([
-                'message' => 'Protocolo de emergencia activado y registrado',
-                'action' => $action,
-                'metadata' => $metadata,
-            ]);
-        }
-
-        $check = $this->runContingencyCheck();
-
-        $this->auditAction(
-            $user,
-            'security.emergency.contingency_check',
-            'security_panel',
-            'superadmin',
-            null,
-            [
-                'reason' => $reason !== '' ? $reason : null,
-                'check' => $check,
-            ],
-            $request->ip(),
-            (string) $request->userAgent()
-        );
-
-        return response()->json([
-            'message' => 'Verificación de contingencia ejecutada y registrada',
-            'action' => $action,
-            'check' => $check,
-        ]);
-    }
-
     public function health(Request $request)
     {
         $check = $this->runContingencyCheck();
@@ -224,53 +159,6 @@ class SecurityOverviewController extends Controller
                 'emergency_restore' => './ops/emergency-recover.sh latest',
             ],
             'checked_at' => now()->toIso8601String(),
-        ]);
-    }
-
-    public function guardianAction(Request $request)
-    {
-        $user = $request->user();
-        $user->loadMissing('role');
-
-        if ($user->role?->name !== 'superadmin') {
-            return response()->json(['message' => 'Only superadmin can execute guardian actions'], 403);
-        }
-
-        $validated = $request->validate([
-            'action' => 'required|in:heal,restart',
-            'target' => 'nullable|in:all,mailpit,db,backend,scheduler,frontend,nginx',
-            'reason' => 'nullable|string|max:500',
-            'confirmed' => 'required|accepted',
-        ]);
-
-        $action = $validated['action'];
-        $target = $validated['target'] ?? null;
-        $reason = trim((string) ($validated['reason'] ?? ''));
-
-        $this->auditAction(
-            $user,
-            'security.guardian.action',
-            'security_panel',
-            'superadmin',
-            null,
-            [
-                'action' => $action,
-                'target' => $target,
-                'reason' => $reason !== '' ? $reason : null,
-                'mode' => 'manual-secure',
-            ],
-            $request->ip(),
-            (string) $request->userAgent()
-        );
-
-        return response()->json([
-            'ok' => true,
-            'message' => 'Acción registrada. Por seguridad, ejecútala manualmente por SSH/VPN en el servidor.',
-            'manual_command' => match ($action) {
-                'heal' => './ops/container-guardian.sh heal long',
-                'restart' => './ops/container-guardian.sh restart ' . ($target ?: 'all'),
-                default => null,
-            },
         ]);
     }
 

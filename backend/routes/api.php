@@ -113,8 +113,6 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/payments/{payment}', [PaymentController::class, 'show']);
 
     Route::get('/admin/security/overview', [SecurityOverviewController::class, 'index']);
-    Route::post('/admin/security/emergency-action', [SecurityOverviewController::class, 'emergencyAction'])->middleware('throttle:15,1');
     Route::get('/admin/security/health', [SecurityOverviewController::class, 'health']);
     Route::get('/admin/security/guardian/status', [SecurityOverviewController::class, 'guardianStatus']);
-    Route::post('/admin/security/guardian/action', [SecurityOverviewController::class, 'guardianAction'])->middleware('throttle:15,1');
 });

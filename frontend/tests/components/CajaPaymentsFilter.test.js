@@ -4,7 +4,7 @@ import { useAuthStore } from '../../src/stores/auth'
 import Payments from '../../src/views/caja/Payments.vue'
 
 vi.mock('vue-router', () => ({
-  useRoute: () => ({ params: {} })
+  useRoute: () => ({ params: { restaurantId: '1' } })
 }))
 
 const flushPromises = () => new Promise((resolve) => setTimeout(resolve, 0))
@@ -18,7 +18,7 @@ describe('Caja Payments.vue pending filter', () => {
 
   it('does not show already collected orders in pending list', async () => {
     const auth = useAuthStore()
-    auth.user = { role: { name: 'staff' } }
+    auth.user = { role: { name: 'staff' }, restaurant_id: 1 }
     auth.token = 'token-test'
     sessionStorage.setItem('scan2order_operator', 'Operador Test')
 

@@ -3,7 +3,6 @@
 .env.*.local
 dist/
 test-results/
-playwright-report/
 node_modules/
 npm-debug.log*
 yarn-debug.log*
