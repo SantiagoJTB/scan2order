@@ -48,6 +48,43 @@
         </div>
       </div>
 
+      <div class="content emergency-wrapper">
+        <div class="table-header-row">
+          <h2>Autoanalizador de contenedores</h2>
+          <button class="btn-refresh" @click="fetchGuardianStatus" :disabled="isGuardianLoading">
+            {{ isGuardianLoading ? 'Consultando...' : 'Ver estado guardian' }}
+          </button>
+        </div>
+
+        <p class="emergency-help">
+          Permite revisar estado y ejecutar acciones de recuperación (heal/restart/start/stop) con confirmación.
+          Todas las acciones quedan auditadas.
+        </p>
+
+        <div v-if="guardianOutput" class="guardian-output">
+          <pre>{{ guardianOutput }}</pre>
+        </div>
+
+        <div class="emergency-actions">
+          <button class="btn-warning" :disabled="isGuardianLoading" @click="askGuardianConfirm('heal')">
+            Heal automático
+          </button>
+          <button class="btn-danger" :disabled="isGuardianLoading" @click="askGuardianConfirm('restart')">
+            Reiniciar todos los contenedores
+          </button>
+          <label class="guardian-switch" :class="{ disabled: isGuardianLoading }">
+            <input
+              type="checkbox"
+              :checked="guardianEnabled"
+              :disabled="isGuardianLoading"
+              @change="onGuardianToggle($event)"
+            />
+            <span class="guardian-slider"></span>
+            <span class="guardian-switch-text">Guardian {{ guardianEnabled ? 'ACTIVO' : 'INACTIVO' }}</span>
+          </label>
+        </div>
+      </div>
+
       <div class="summary-grid" v-if="summary">
         <div class="stat-card">
           <p class="stat-label">Superadmins activos</p>
@@ -150,6 +187,33 @@
           </div>
         </div>
       </div>
+
+      <div v-if="showGuardianConfirmModal" class="modal-overlay">
+        <div class="modal">
+          <div class="modal-header">
+            <h2>Confirmar acción de contenedores</h2>
+            <button class="btn-close" @click="cancelGuardianConfirm">×</button>
+          </div>
+          <div class="modal-body">
+            <p>
+              Esta acción puede afectar disponibilidad. ¿Seguro que deseas ejecutar:
+              <strong>{{ guardianActionLabel }}</strong>?
+            </p>
+            <label class="confirm-reason-label">Motivo (opcional):</label>
+            <textarea v-model="guardianConfirmReason" rows="3" placeholder="Motivo operacional"></textarea>
+            <div class="confirm-check">
+              <input id="guardian-confirm-check" v-model="guardianConfirmChecked" type="checkbox" />
+              <label for="guardian-confirm-check">Sí, confirmar esta acción</label>
+            </div>
+            <div class="modal-actions">
+              <button class="btn-cancel" @click="cancelGuardianConfirm" :disabled="isGuardianLoading">Cancelar</button>
+              <button class="btn-danger" @click="executeGuardianAction" :disabled="isGuardianLoading || !guardianConfirmChecked">
+                {{ isGuardianLoading ? 'Procesando...' : 'Confirmar' }}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 </template>
@@ -169,6 +233,13 @@ const availableActions = ref([])
 const actionMessage = ref('')
 const healthCheck = ref(null)
 const isActionLoading = ref(false)
+const guardianOutput = ref('')
+const isGuardianLoading = ref(false)
+const guardianEnabled = ref(false)
+const showGuardianConfirmModal = ref(false)
+const guardianConfirmChecked = ref(false)
+const guardianConfirmReason = ref('')
+const pendingGuardianAction = ref('')
 const showConfirmModal = ref(false)
 const confirmChecked = ref(false)
 const confirmReason = ref('')
@@ -187,6 +258,14 @@ const confirmMessage = computed(() => {
     return 'Vas a ejecutar una verificación de contingencia del sistema y registrarla en auditoría.'
   }
   return 'Confirma la acción.'
+})
+
+const guardianActionLabel = computed(() => {
+  if (pendingGuardianAction.value === 'start_daemon') return 'activar guardian'
+  if (pendingGuardianAction.value === 'stop_daemon') return 'desactivar guardian'
+  if (pendingGuardianAction.value === 'heal') return 'heal automático'
+  if (pendingGuardianAction.value === 'restart') return 'reiniciar todos los contenedores'
+  return pendingGuardianAction.value || 'acción'
 })
 
 function formatDate(value) {
@@ -270,6 +349,25 @@ function askConfirm(action) {
   showConfirmModal.value = true
 }
 
+function askGuardianConfirm(action) {
+  pendingGuardianAction.value = action
+  guardianConfirmReason.value = ''
+  guardianConfirmChecked.value = false
+  showGuardianConfirmModal.value = true
+}
+
+function onGuardianToggle(event) {
+  const checked = Boolean(event?.target?.checked)
+  askGuardianConfirm(checked ? 'start_daemon' : 'stop_daemon')
+}
+
+function cancelGuardianConfirm() {
+  showGuardianConfirmModal.value = false
+  guardianConfirmChecked.value = false
+  guardianConfirmReason.value = ''
+  pendingGuardianAction.value = ''
+}
+
 function cancelConfirm() {
   showConfirmModal.value = false
   pendingAction.value = ''
@@ -316,6 +414,87 @@ async function executeConfirmedAction() {
   }
 }
 
+async function fetchGuardianStatus() {
+  isGuardianLoading.value = true
+  error.value = ''
+
+  try {
+    const response = await fetch('/api/admin/security/guardian/status', {
+      headers: {
+        Accept: 'application/json',
+        ...(auth.token ? { Authorization: `Bearer ${auth.token}` } : {}),
+      },
+    })
+
+    const data = await response.json()
+    if (!response.ok) {
+      throw new Error(data?.message || 'No se pudo consultar guardian')
+    }
+
+    const commands = data?.commands
+      ? Object.entries(data.commands).map(([key, command]) => `- ${key}: ${command}`).join('\n')
+      : ''
+
+    guardianOutput.value = [
+      data?.message || '',
+      commands ? `\nComandos:\n${commands}` : ''
+    ].join('\n').trim() || 'Modo seguro activo. Usa comandos manuales por SSH/VPN.'
+  } catch (err) {
+    error.value = err.message || 'No se pudo consultar guardian'
+  } finally {
+    isGuardianLoading.value = false
+  }
+}
+
+async function executeGuardianAction() {
+  if (!pendingGuardianAction.value) return
+
+  isGuardianLoading.value = true
+  error.value = ''
+  actionMessage.value = ''
+
+  try {
+    const response = await fetch('/api/admin/security/guardian/action', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+        ...(auth.token ? { Authorization: `Bearer ${auth.token}` } : {}),
+      },
+      body: JSON.stringify({
+        action: pendingGuardianAction.value,
+        target: pendingGuardianAction.value === 'restart' ? 'all' : null,
+        reason: guardianConfirmReason.value || null,
+      }),
+    })
+
+    const data = await response.json()
+    if (!response.ok) {
+      throw new Error(data?.message || 'No se pudo ejecutar guardian')
+    }
+
+    actionMessage.value = data?.message || 'Acción guardian completada'
+    guardianOutput.value = data?.manual_command
+      ? `Ejecuta manualmente:\n${data.manual_command}`
+      : (data?.message || 'Acción registrada')
+
+    if (pendingGuardianAction.value === 'start_daemon') {
+      guardianEnabled.value = true
+    }
+
+    if (pendingGuardianAction.value === 'stop_daemon') {
+      guardianEnabled.value = false
+    }
+
+    cancelGuardianConfirm()
+    await fetchOverview()
+  } catch (err) {
+    error.value = err.message || 'No se pudo ejecutar guardian'
+  } finally {
+    isGuardianLoading.value = false
+  }
+}
+
 function clearFilters() {
   filters.value = {
     action: '',
@@ -332,6 +511,7 @@ onMounted(async () => {
 
   await fetchOverview()
   await fetchHealth()
+  await fetchGuardianStatus()
 })
 </script>
 
@@ -553,6 +733,71 @@ onMounted(async () => {
   display: flex;
   justify-content: flex-end;
   gap: 0.5rem;
+}
+
+.guardian-output {
+  margin-bottom: 0.8rem;
+}
+
+.guardian-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  cursor: pointer;
+}
+
+.guardian-switch input {
+  display: none;
+}
+
+.guardian-slider {
+  width: 44px;
+  height: 24px;
+  border-radius: 999px;
+  background: #cbd5e1;
+  position: relative;
+  transition: background 0.25s ease;
+}
+
+.guardian-slider::after {
+  content: '';
+  width: 18px;
+  height: 18px;
+  background: #fff;
+  border-radius: 999px;
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  transition: transform 0.25s ease;
+}
+
+.guardian-switch input:checked + .guardian-slider {
+  background: #22c55e;
+}
+
+.guardian-switch input:checked + .guardian-slider::after {
+  transform: translateX(20px);
+}
+
+.guardian-switch-text {
+  font-weight: 700;
+  color: #334155;
+  font-size: 0.86rem;
+}
+
+.guardian-switch.disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.guardian-output pre {
+  background: #111827;
+  color: #e5e7eb;
+  border-radius: 8px;
+  padding: 0.75rem;
+  font-size: 0.82rem;
+  white-space: pre-wrap;
+  margin: 0;
 }
 
 .table-wrapper {

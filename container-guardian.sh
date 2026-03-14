@@ -47,20 +47,19 @@ ensure_service_healthy() {
   health="$(container_health "$container_name")"
 
   if [[ "$state" == "missing" ]]; then
-    echo "[$(date '+%Y-%m-%d %H:%M:%S')] $service missing -> starting"
-    $COMPOSE_CMD up -d "$service" >/dev/null
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] $service missing -> unable to auto-create container"
     return
   fi
 
   if [[ "$state" != "running" ]]; then
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] $service state=$state -> restarting"
-    $COMPOSE_CMD restart "$service" >/dev/null || $COMPOSE_CMD up -d "$service" >/dev/null
+    docker restart "$container_name" >/dev/null || docker start "$container_name" >/dev/null
     return
   fi
 
   if [[ "$health" == "unhealthy" ]]; then
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] $service health=unhealthy -> restarting"
-    $COMPOSE_CMD restart "$service" >/dev/null
+    docker restart "$container_name" >/dev/null
     return
   fi
 
@@ -99,7 +98,13 @@ restart_target() {
   local target="${1:-all}"
 
   if [[ "$target" == "all" ]]; then
-    $COMPOSE_CMD restart "${ALL_SERVICES[@]}"
+    for service in "${ALL_SERVICES[@]}"; do
+      local container_name
+      container_name="$(container_name_for_service "$service")"
+      if docker inspect "$container_name" >/dev/null 2>&1; then
+        docker restart "$container_name" >/dev/null || true
+      fi
+    done
     return
   fi
 
@@ -109,7 +114,14 @@ restart_target() {
     exit 1
   fi
 
-  $COMPOSE_CMD restart "$target"
+  local container_name
+  container_name="$(container_name_for_service "$target")"
+  if ! docker inspect "$container_name" >/dev/null 2>&1; then
+    echo "Contenedor no encontrado: $container_name"
+    exit 1
+  fi
+
+  docker restart "$container_name"
 }
 
 daemon_loop() {

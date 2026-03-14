@@ -115,4 +115,6 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/admin/security/overview', [SecurityOverviewController::class, 'index']);
     Route::post('/admin/security/emergency-action', [SecurityOverviewController::class, 'emergencyAction']);
     Route::get('/admin/security/health', [SecurityOverviewController::class, 'health']);
+    Route::get('/admin/security/guardian/status', [SecurityOverviewController::class, 'guardianStatus']);
+    Route::post('/admin/security/guardian/action', [SecurityOverviewController::class, 'guardianAction']);
 });

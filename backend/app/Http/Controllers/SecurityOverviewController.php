@@ -203,6 +203,79 @@ class SecurityOverviewController extends Controller
         ]);
     }
 
+    public function guardianStatus(Request $request)
+    {
+        $user = $request->user();
+        $user->loadMissing('role');
+
+        if ($user->role?->name !== 'superadmin') {
+            return response()->json(['message' => 'Only superadmin can access guardian status'], 403);
+        }
+
+        return response()->json([
+            'ok' => true,
+            'mode' => 'manual-secure',
+            'message' => 'Control de contenedores desde la app deshabilitado por seguridad. Usa SSH/VPN y scripts locales.',
+            'commands' => [
+                'check' => './container-guardian.sh check long',
+                'heal' => './container-guardian.sh heal long',
+                'restart_all' => './container-guardian.sh restart all',
+                'start_watchdog' => './start-guardian.sh long',
+                'stop_watchdog' => './stop-guardian.sh',
+                'emergency_restore' => './emergency-recover.sh latest',
+            ],
+            'checked_at' => now()->toIso8601String(),
+        ]);
+    }
+
+    public function guardianAction(Request $request)
+    {
+        $user = $request->user();
+        $user->loadMissing('role');
+
+        if ($user->role?->name !== 'superadmin') {
+            return response()->json(['message' => 'Only superadmin can execute guardian actions'], 403);
+        }
+
+        $validated = $request->validate([
+            'action' => 'required|in:heal,restart,start_daemon,stop_daemon',
+            'target' => 'nullable|in:all,mailpit,db,backend,scheduler,frontend,nginx',
+            'reason' => 'nullable|string|max:500',
+        ]);
+
+        $action = $validated['action'];
+        $target = $validated['target'] ?? null;
+        $reason = trim((string) ($validated['reason'] ?? ''));
+
+        $this->auditAction(
+            $user,
+            'security.guardian.action',
+            'security_panel',
+            'superadmin',
+            null,
+            [
+                'action' => $action,
+                'target' => $target,
+                'reason' => $reason !== '' ? $reason : null,
+                'mode' => 'manual-secure',
+            ],
+            $request->ip(),
+            (string) $request->userAgent()
+        );
+
+        return response()->json([
+            'ok' => true,
+            'message' => 'Acción registrada. Por seguridad, ejecútala manualmente por SSH/VPN en el servidor.',
+            'manual_command' => match ($action) {
+                'heal' => './container-guardian.sh heal long',
+                'restart' => './container-guardian.sh restart ' . ($target ?: 'all'),
+                'start_daemon' => './start-guardian.sh long',
+                'stop_daemon' => './stop-guardian.sh',
+                default => null,
+            },
+        ]);
+    }
+
     private function runContingencyCheck(): array
     {
         $dbOk = false;
