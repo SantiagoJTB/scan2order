@@ -14,6 +14,15 @@ class ProductController extends Controller
 {
     private const STAFF_HIDE_PERMISSION = 'hide_products_from_menu';
 
+    private function deleteStoredProductImages(iterable $products): void
+    {
+        foreach ($products as $product) {
+            if (!empty($product->image)) {
+                Storage::delete('public/' . $product->image);
+            }
+        }
+    }
+
     private function strictStaffRestaurantIds($user): array
     {
         return $user->restaurants()->pluck('restaurants.id')->map(fn ($id) => (int) $id)->all();
@@ -251,6 +260,13 @@ class ProductController extends Controller
             return response()->json(['error' => 'Catálogo no encontrado'], 404);
         }
 
+        $products = Product::query()
+            ->whereIn('section_id', $catalog->sections()->pluck('id'))
+            ->whereNotNull('image')
+            ->get(['image']);
+
+        $this->deleteStoredProductImages($products);
+
         $catalog->delete();
 
         return response()->json(['message' => 'Catálogo eliminado']);
@@ -332,6 +348,10 @@ class ProductController extends Controller
             return response()->json(['error' => 'Sección no encontrada'], 404);
         }
 
+        $this->deleteStoredProductImages(
+            $section->products()->whereNotNull('image')->get(['image'])
+        );
+
         $section->delete();
 
         return response()->json(['message' => 'Sección eliminada']);
@@ -361,6 +381,7 @@ class ProductController extends Controller
             'description' => 'nullable|string',
             'price' => 'required|numeric|min:0',
             'active' => 'boolean',
+            'show_image' => 'boolean',
             'image' => 'nullable|image|mimes:jpeg,png,jpg,gif,webp|max:2048',
         ]);
 
@@ -422,6 +443,7 @@ class ProductController extends Controller
             'description' => 'nullable|string',
             'price' => 'numeric|min:0',
             'active' => 'boolean',
+            'show_image' => 'boolean',
             'image' => 'nullable|image|mimes:jpeg,png,jpg,gif,webp|max:2048',
             'remove_image' => 'boolean',
         ]);
@@ -471,6 +493,10 @@ class ProductController extends Controller
         $product = $section->products()->find($productId);
         if (!$product) {
             return response()->json(['error' => 'Producto no encontrado'], 404);
+        }
+
+        if ($product->image) {
+            Storage::delete('public/' . $product->image);
         }
 
         $product->delete();

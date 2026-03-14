@@ -48,6 +48,9 @@ Route::middleware('auth:sanctum')->group(function () {
 // User management (protected)
 Route::middleware('auth:sanctum')->group(function () {
     Route::post('/users', [UserController::class, 'store']);
+    Route::get('/users/limits', [UserController::class, 'getCreationLimits']);
+    Route::patch('/users/limits/system', [UserController::class, 'updateSystemLimits']);
+    Route::patch('/users/{user}/staff-limit', [UserController::class, 'updateAdminStaffLimit']);
     Route::get('/users', [UserController::class, 'index']);
     Route::get('/users/{user}', [UserController::class, 'show']);
     Route::patch('/users/{user}', [UserController::class, 'update']);

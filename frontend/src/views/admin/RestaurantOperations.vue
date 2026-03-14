@@ -16,6 +16,7 @@
         <div class="panel-header">
           <h2>💰 Caja</h2>
           <p>Procesa los pagos de las órdenes</p>
+          <p class="section-note">Los cobros y cancelaciones solo pueden hacerse desde caja.</p>
         </div>
 
         <div class="panel-content">
@@ -67,11 +68,6 @@
                       {{ item.quantity }} x {{ item.product?.name || `Producto #${item.product_id}` }}
                     </li>
                   </ul>
-
-                  <div class="order-actions">
-                    <button class="btn btn-paid" @click="markAsPaid(order)">Cobrada</button>
-                    <button class="btn btn-cancel" @click="markAsCancelled(order)">Cancelar</button>
-                  </div>
                 </div>
               </div>
             </div>
@@ -99,11 +95,6 @@
                       {{ item.quantity }} x {{ item.product?.name || `Producto #${item.product_id}` }}
                     </li>
                   </ul>
-
-                  <div class="order-actions">
-                    <button class="btn btn-paid" @click="markAsPaid(order)">Cobrada</button>
-                    <button class="btn btn-cancel" @click="markAsCancelled(order)">Cancelar</button>
-                  </div>
                 </div>
               </div>
             </div>
@@ -115,6 +106,7 @@
         <div class="panel-header">
           <h2>👨‍🍳 Cocina</h2>
           <p>Gestiona la preparación de órdenes</p>
+          <p class="section-note">La preparación solo puede gestionarse desde cocina.</p>
         </div>
 
         <div class="panel-content">
@@ -154,17 +146,6 @@
                   {{ item.quantity }} x {{ item.product?.name || `Producto #${item.product_id}` }}
                 </li>
               </ul>
-
-              <div class="order-actions">
-                <button
-                  v-if="order.status !== 'completed'"
-                  class="btn btn-prepare"
-                  @click="updateOrderStatus(order, order.status === 'pending' ? 'preparing' : 'completed')"
-                >
-                  {{ order.status === 'pending' ? 'Comenzar preparación' : 'Marcar lista' }}
-                </button>
-                <span v-else class="status-completed">✓ Lista</span>
-              </div>
             </div>
           </div>
         </div>
@@ -223,6 +204,9 @@
                 <div class="history-invoice-row">
                   <span>{{ invoice.itemsCount }} ítems</span>
                   <span>${{ invoice.amount.toFixed(2) }}</span>
+                </div>
+                <div v-if="invoice.operatorName" class="history-invoice-row history-operator">
+                  <span>👤 {{ invoice.operatorName }}</span>
                 </div>
               </div>
             </div>
@@ -417,7 +401,8 @@ const dailyHistory = computed(() => {
         orderId: order.id,
         amount: Number(invoiceAmount || 0),
         methodLabel,
-        itemsCount: orderItems.reduce((sum, item) => sum + Number(item?.quantity || 0), 0)
+        itemsCount: orderItems.reduce((sum, item) => sum + Number(item?.quantity || 0), 0),
+        operatorName: order.operator_name || null
       })
     }
 
@@ -592,7 +577,7 @@ async function markAsPaid(order) {
         'Content-Type': 'application/json',
         'Accept': 'application/json'
       },
-      body: JSON.stringify({ status: 'paid' })
+      body: JSON.stringify({ status: 'paid', operator_name: auth.user?.name || null })
     })
 
     if (!response.ok) throw new Error('No se pudo actualizar la orden')
@@ -613,7 +598,7 @@ async function markAsCancelled(order) {
         'Content-Type': 'application/json',
         'Accept': 'application/json'
       },
-      body: JSON.stringify({ status: 'cancelled' })
+      body: JSON.stringify({ status: 'cancelled', operator_name: auth.user?.name || null })
     })
 
     if (!response.ok) throw new Error('No se pudo cancelar la orden')
@@ -634,7 +619,7 @@ async function updateOrderStatus(order, newStatus) {
         'Content-Type': 'application/json',
         'Accept': 'application/json'
       },
-      body: JSON.stringify({ status: newStatus })
+      body: JSON.stringify({ status: newStatus, operator_name: auth.user?.name || null })
     })
 
     if (!response.ok) throw new Error('No se pudo actualizar la orden')
@@ -843,6 +828,13 @@ onBeforeUnmount(() => {
   color: #444;
 }
 
+.history-operator {
+  color: #1565c0;
+  font-style: italic;
+  font-size: 12px;
+  margin-top: 2px;
+}
+
 @media (max-width: 1400px) {
   .operations-grid {
     grid-template-columns: 1fr;
@@ -1037,6 +1029,13 @@ onBeforeUnmount(() => {
   margin: 8px 0;
   font-size: 14px;
   color: #555;
+}
+
+.section-note {
+  margin: 12px 0 0;
+  font-size: 13px;
+  color: #2458b8;
+  font-weight: 600;
 }
 
 .order-meta strong {

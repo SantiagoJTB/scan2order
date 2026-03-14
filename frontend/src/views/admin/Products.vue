@@ -55,6 +55,26 @@
           placeholder="Buscar en catálogos, secciones y productos..."
         />
         <button v-if="searchQuery" class="btn-clear-search" @click="searchQuery = ''">Limpiar</button>
+        <span
+          v-if="!isStaff && hasAnyProducts"
+          class="photo-mode-indicator"
+          :class="{
+            'is-on': globalPhotoMode === 'on',
+            'is-off': globalPhotoMode === 'off'
+          }"
+        >
+          Fotos: {{ globalPhotoModeLabel }}
+        </span>
+        <label v-if="!isStaff" class="photo-switch" :class="{ disabled: isUpdatingPhotoVisibility || !hasAnyProducts }">
+          <input
+            type="checkbox"
+            :checked="globalPhotoMode === 'on'"
+            :disabled="isUpdatingPhotoVisibility || !hasAnyProducts"
+            @change="onGlobalPhotoToggle($event)"
+          />
+          <span class="photo-switch-slider"></span>
+          <span class="photo-switch-text">{{ isUpdatingPhotoVisibility ? 'Aplicando...' : 'Fotos globales' }}</span>
+        </label>
       </div>
 
       <div v-if="isLoading" class="loading">Cargando catálogos...</div>
@@ -106,7 +126,10 @@
                 <div v-for="product in section.products" :key="product.id" :class="['product-item', { 'product-item-inactive': !product.active }]">
                   <img v-if="product.image" :src="`/storage/${product.image}`" alt="" class="product-thumbnail" />
                   <div v-else class="product-no-image">📦</div>
-                  <div class="product-name">{{ product.name }}</div>
+                  <div class="product-name">
+                    {{ product.name }}
+                    <span v-if="product.show_image !== false && !product.image" class="badge-no-image" title="Las fotos están activadas pero este producto no tiene imagen">⚠️ Sin foto</span>
+                  </div>
                   <div class="product-price">${{ product.price }}</div>
                   <div class="product-actions">
                     <button
@@ -215,6 +238,12 @@
             <button type="button" @click="removeImage" class="btn-remove-image">✕ Eliminar imagen</button>
           </div>
         </div>
+        <div class="form-group checkbox-group">
+          <label>
+            <input v-model="productForm.showImage" type="checkbox" />
+            Mostrar foto en la vista de cliente
+          </label>
+        </div>
         <div class="form-actions">
           <button type="button" @click="closeProductModal" class="btn-cancel">Cancelar</button>
           <button type="submit" class="btn-save">{{ editingProduct ? 'Actualizar' : 'Crear' }}</button>
@@ -306,10 +335,11 @@ const sectionForm = ref({ name: '', description: '', active: true, order: 0 })
 const showProductModal = ref(false)
 const editingProduct = ref(null)
 const selectedSection = ref(null)
-const productForm = ref({ name: '', description: '', price: 0, active: true })
+const productForm = ref({ name: '', description: '', price: 0, active: true, showImage: false })
 const productImageFile = ref(null)
 const productImagePreview = ref(null)
 const removeProductImage = ref(false)
+const isUpdatingPhotoVisibility = ref(false)
 const showPriceAdjustModal = ref(false)
 const isApplyingPriceAdjust = ref(false)
 const selectedCatalogForPrice = ref(null)
@@ -355,6 +385,38 @@ const filteredCatalogs = computed(() => {
       return null
     })
     .filter(Boolean)
+})
+
+const allProductsForRestaurant = computed(() =>
+  catalogs.value.flatMap((catalog) =>
+    (catalog.sections || []).flatMap((section) =>
+      (section.products || []).map((product) => ({
+        catalogId: catalog.id,
+        sectionId: section.id,
+        product,
+      }))
+    )
+  )
+)
+
+const hasAnyProducts = computed(() => allProductsForRestaurant.value.length > 0)
+
+const globalPhotoMode = computed(() => {
+  if (!hasAnyProducts.value) return 'none'
+
+  const visibleCount = allProductsForRestaurant.value.filter(
+    ({ product }) => product.show_image !== false
+  ).length
+
+  if (visibleCount === 0) return 'off'
+  if (visibleCount === allProductsForRestaurant.value.length) return 'on'
+  return 'off'
+})
+
+const globalPhotoModeLabel = computed(() => {
+  if (globalPhotoMode.value === 'on') return 'ON'
+  if (globalPhotoMode.value === 'off') return 'OFF'
+  return 'N/D'
 })
 
 onMounted(async () => {
@@ -667,7 +729,8 @@ function openProductForm(catalog, section, product = null) {
       name: product.name, 
       description: product.description || '', 
       price: product.price || 0,
-      active: product.active !== undefined ? product.active : true
+      active: product.active !== undefined ? product.active : true,
+      showImage: product.show_image !== false
     }
     // Set preview to existing image if available
     if (product.image) {
@@ -675,7 +738,7 @@ function openProductForm(catalog, section, product = null) {
     }
   } else {
     editingProduct.value = null
-    productForm.value = { name: '', description: '', price: 0, active: true }
+    productForm.value = { name: '', description: '', price: 0, active: true, showImage: false }
   }
   showProductModal.value = true
 }
@@ -727,6 +790,7 @@ async function saveProduct() {
     formData.append('description', productForm.value.description || '')
     formData.append('price', productForm.value.price)
     formData.append('active', productForm.value.active ? '1' : '0')
+    formData.append('show_image', productForm.value.showImage ? '1' : '0')
     
     if (productImageFile.value) {
       formData.append('image', productImageFile.value)
@@ -807,6 +871,63 @@ async function toggleProductVisibility(catalog, section, product) {
   } catch (err) {
     showToast(err.message, 'error')
   }
+}
+
+async function setAllProductsPhotoVisibility(show) {
+  if (isStaff.value) {
+    showToast('Staff no puede modificar configuración global de fotos', 'error')
+    return
+  }
+
+  if (!hasAnyProducts.value) {
+    showToast('No hay productos para actualizar', 'error')
+    return
+  }
+
+  const targetProducts = allProductsForRestaurant.value.filter(
+    ({ product }) => (product.show_image !== false) !== show
+  )
+
+  if (targetProducts.length === 0) {
+    showToast(show ? 'Todas las fotos ya están visibles' : 'Todas las fotos ya están ocultas')
+    return
+  }
+
+  isUpdatingPhotoVisibility.value = true
+
+  try {
+    for (const item of targetProducts) {
+      const response = await fetch(
+        `/api/restaurants/${selectedRestaurantId.value}/catalogs/${item.catalogId}/sections/${item.sectionId}/products/${item.product.id}`,
+        {
+          method: 'PUT',
+          headers: {
+            'Authorization': `Bearer ${auth.token}`,
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+          },
+          body: JSON.stringify({ show_image: show }),
+        }
+      )
+
+      if (!response.ok) {
+        throw new Error(`No se pudo actualizar el producto ${item.product.name}`)
+      }
+    }
+
+    await fetchCatalogs()
+    showToast(show ? 'Fotos activadas en todos los productos' : 'Fotos ocultadas en todos los productos')
+  } catch (err) {
+    showToast(err.message, 'error')
+  } finally {
+    isUpdatingPhotoVisibility.value = false
+  }
+}
+
+function onGlobalPhotoToggle(event) {
+  const target = event?.target
+  const shouldShow = Boolean(target?.checked)
+  setAllProductsPhotoVisibility(shouldShow)
 }
 
 function editCatalog(catalog) {
@@ -902,12 +1023,12 @@ async function applyCatalogPriceAdjustment() {
 .products-container {
   max-width: 1200px;
   margin: 0 auto;
-  padding: 2rem 0;
+  padding: 0;
 }
 
 .header {
   margin-bottom: 2rem;
-  color: #2c3e50;
+  color: white;
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -919,23 +1040,27 @@ async function applyCatalogPriceAdjustment() {
 }
 
 .btn-back {
-  background: #95a5a6;
+  background: #667eea;
   color: white;
   border: none;
-  padding: 0.6rem 1.2rem;
-  border-radius: 6px;
+  padding: 0.65rem 1.2rem;
+  border-radius: 5px;
   cursor: pointer;
-  font-size: 1rem;
-  transition: background 0.2s;
+  font-size: 0.95rem;
+  font-weight: 600;
+  transition: opacity 0.2s;
 }
 
 .btn-back:hover {
-  background: #7f8c8d;
+  opacity: 0.9;
 }
 
 /* Restaurant Stats View */
 .restaurants-stats {
-  padding: 1rem;
+  background: white;
+  border-radius: 10px;
+  padding: 2rem;
+  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.1);
 }
 
 .stats-grid {
@@ -946,19 +1071,17 @@ async function applyCatalogPriceAdjustment() {
 }
 
 .restaurant-card {
-  background: white;
+  background: #fff;
   border: 2px solid #e8eef3;
   border-radius: 10px;
-  padding: 1.5rem;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  padding: 1.2rem;
   cursor: pointer;
-  transition: all 0.3s ease;
+  transition: all 0.2s ease;
 }
 
 .restaurant-card:hover {
-  transform: translateY(-4px);
-  box-shadow: 0 4px 16px rgba(52, 152, 219, 0.2);
-  border-color: #3498db;
+  border-color: #667eea;
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.12);
 }
 
 .restaurant-card-header h3 {
@@ -1038,21 +1161,28 @@ async function applyCatalogPriceAdjustment() {
   color: #2c3e50;
   border-radius: 8px;
   padding: 1rem;
-  border-left: 4px solid #3498db;
+  border-left: 4px solid #667eea;
 }
 
 .tools-row {
   display: flex;
   gap: 0.75rem;
   margin-bottom: 1rem;
+  flex-wrap: wrap;
 }
 
 .search-input {
   flex: 1;
-  padding: 0.7rem 0.85rem;
-  border: 1px solid #bdc3c7;
+  padding: 0.75rem 0.9rem;
+  border: 1px solid #d8e0ea;
   border-radius: 6px;
   font-size: 0.95rem;
+}
+
+.search-input:focus {
+  outline: none;
+  border-color: #667eea;
+  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.12);
 }
 
 .btn-clear-search {
@@ -1068,6 +1198,86 @@ async function applyCatalogPriceAdjustment() {
   background: #d5dbdb;
 }
 
+.photo-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  cursor: pointer;
+  user-select: none;
+}
+
+.photo-switch input {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.photo-switch-slider {
+  position: relative;
+  width: 46px;
+  height: 26px;
+  border-radius: 999px;
+  background: #d7dee8;
+  transition: background 0.2s ease;
+}
+
+.photo-switch-slider::after {
+  content: '';
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+  transition: transform 0.2s ease;
+}
+
+.photo-switch input:checked + .photo-switch-slider {
+  background: #27ae60;
+}
+
+.photo-switch input:checked + .photo-switch-slider::after {
+  transform: translateX(20px);
+}
+
+.photo-switch-text {
+  color: #2c3e50;
+  font-size: 0.9rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.photo-switch.disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.photo-mode-indicator {
+  display: inline-flex;
+  align-items: center;
+  font-weight: 700;
+  border-radius: 999px;
+  padding: 0.45rem 0.75rem;
+  font-size: 0.82rem;
+  border: 1px solid transparent;
+  white-space: nowrap;
+}
+
+.photo-mode-indicator.is-on {
+  background: #e8f5e9;
+  color: #1b5e20;
+  border-color: #c8e6c9;
+}
+
+.photo-mode-indicator.is-off {
+  background: #ffebee;
+  color: #b71c1c;
+  border-color: #ffcdd2;
+}
+
 .loading, .empty-state {
   text-align: center;
   padding: 2rem;
@@ -1078,8 +1288,8 @@ async function applyCatalogPriceAdjustment() {
 .content {
   background: white;
   border-radius: 10px;
-  padding: 1.5rem;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  padding: 2rem;
+  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.1);
 }
 
 .catalogs-list {
@@ -1090,9 +1300,9 @@ async function applyCatalogPriceAdjustment() {
 
 .catalog-card {
   border: 2px solid #e8eef3;
-  border-radius: 8px;
+  border-radius: 10px;
   padding: 1rem;
-  background: #f8fafb;
+  background: #fff;
 }
 
 .catalog-header {
@@ -1123,15 +1333,15 @@ async function applyCatalogPriceAdjustment() {
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
-  padding-left: 1rem;
-  border-left: 3px solid #667eea;
+  padding-left: 0.9rem;
+  border-left: 2px solid #e6ecf5;
 }
 
 .section-item {
-  background: white;
-  border-radius: 6px;
-  padding: 0.75rem;
-  border: 1px solid #ecf0f1;
+  background: #f8fafc;
+  border-radius: 8px;
+  padding: 0.8rem;
+  border: 1px solid #e7edf5;
 }
 
 .section-header {
@@ -1143,7 +1353,7 @@ async function applyCatalogPriceAdjustment() {
 
 .section-header h4 {
   margin: 0;
-  color: #667eea;
+  color: #2c3e50;
   font-size: 1rem;
 }
 
@@ -1156,18 +1366,18 @@ async function applyCatalogPriceAdjustment() {
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
-  padding-left: 1rem;
-  border-left: 2px solid #f39c12;
+  padding-left: 0.8rem;
+  border-left: 2px solid #dfe7f3;
 }
 
 .product-item {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  background: #fffaf0;
-  padding: 0.5rem;
-  border-radius: 4px;
-  border: 1px solid #f5e6d3;
+  background: #fff;
+  padding: 0.6rem;
+  border-radius: 6px;
+  border: 1px solid #e4eaf3;
   gap: 0.75rem;
 }
 
@@ -1200,10 +1410,28 @@ async function applyCatalogPriceAdjustment() {
   font-weight: 500;
   color: #2c3e50;
   flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+}
+
+.badge-no-image {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  font-size: 0.7rem;
+  font-weight: 600;
+  background: #fff3cd;
+  color: #856404;
+  border: 1px solid #ffc107;
+  border-radius: 4px;
+  padding: 1px 6px;
+  white-space: nowrap;
 }
 
 .product-price {
-  color: #27ae60;
+  color: #1f8a4d;
   font-weight: 600;
   margin: 0 0.5rem;
   min-width: 60px;
@@ -1281,16 +1509,17 @@ async function applyCatalogPriceAdjustment() {
   background: #667eea;
   color: white;
   border: none;
-  padding: 0.4rem 0.8rem;
-  border-radius: 4px;
+  padding: 0.45rem 0.85rem;
+  border-radius: 6px;
   cursor: pointer;
-  font-size: 0.8rem;
-  transition: background 0.3s;
+  font-size: 0.82rem;
+  font-weight: 600;
+  transition: opacity 0.2s;
   margin-top: 0.5rem;
 }
 
 .btn-small:hover, .btn-add-product:hover, .btn-add-section:hover {
-  background: #5a67d8;
+  opacity: 0.9;
 }
 
 .btn-primary {
@@ -1298,14 +1527,14 @@ async function applyCatalogPriceAdjustment() {
   color: white;
   border: none;
   padding: 0.75rem 1.5rem;
-  border-radius: 6px;
+  border-radius: 5px;
   cursor: pointer;
   font-weight: 600;
-  transition: background 0.3s;
+  transition: opacity 0.2s;
 }
 
 .btn-primary:hover {
-  background: #229954;
+  opacity: 0.9;
 }
 
 .btn-large {
@@ -1338,9 +1567,10 @@ async function applyCatalogPriceAdjustment() {
   background: white;
   border-radius: 10px;
   width: 90%;
-  max-width: 500px;
+  max-width: 640px;
   max-height: 90vh;
   overflow: auto;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
 }
 
 .modal-header {
@@ -1348,7 +1578,7 @@ async function applyCatalogPriceAdjustment() {
   justify-content: space-between;
   align-items: center;
   padding: 1.5rem;
-  border-bottom: 1px solid #ecf0f1;
+  border-bottom: 2px solid #ecf0f1;
 }
 
 .modal-header h2 {

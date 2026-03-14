@@ -3,9 +3,28 @@
     <div class="header">
       <h1>Gestión de Pagos{{ restaurantName ? ` - ${restaurantName}` : '' }}</h1>
       <p>Panel de caja - Procesa los pagos de las órdenes</p>
+      <p v-if="operatorName" class="operator-label">👤 Operando como: <strong>{{ operatorName }}</strong></p>
     </div>
 
     <div class="content">
+      <!-- Operator check-in modal -->
+      <div v-if="!operatorName" class="operator-overlay">
+        <div class="operator-modal">
+          <h2>🔐 Identificación requerida</h2>
+          <p>Introduce tu nombre completo para registrar tu acceso a caja. Quedará vinculado a todas las operaciones que realices.</p>
+          <input
+            v-model="operatorInputName"
+            type="text"
+            placeholder="Ej: María García"
+            class="operator-input"
+            @keyup.enter="confirmOperator"
+            autofocus
+          />
+          <button class="btn-operator-confirm" :disabled="!operatorInputName.trim()" @click="confirmOperator">
+            Acceder a caja
+          </button>
+        </div>
+      </div>
       <div v-if="toast.show" class="toast" :class="`toast-${toast.type}`">{{ toast.message }}</div>
 
       <div class="actions-row">
@@ -131,7 +150,8 @@
             <p class="order-meta"><strong>Total:</strong> ${{ Number(order.total || 0).toFixed(2) }}</p>
             <p v-if="order.type === 'delivery' && order.delivery_address" class="order-meta"><strong>Dirección:</strong> {{ order.delivery_address }}</p>
             <p class="order-meta"><strong>Método:</strong> {{ getPaymentMethod(order) }}</p>
-            <p v-if="showHistory" class="order-meta"><strong>Cobrada:</strong> {{ formatDateTime(order.updated_at) }}</p>
+            <p class="order-meta"><strong>Cobrada:</strong> {{ formatDateTime(order.updated_at) }}</p>
+            <p v-if="order.operator_name" class="order-meta operator-tag"><strong>👤 Operador:</strong> {{ order.operator_name }}</p>
 
             <ul v-if="order.order_items?.length" class="items-list">
               <li v-for="item in order.order_items" :key="item.id">
@@ -247,6 +267,8 @@ const lastUpdated = ref('')
 const showHistory = ref(false)
 const restaurantId = computed(() => route.params.restaurantId ? parseInt(route.params.restaurantId) : null)
 const restaurantName = ref('')
+const operatorName = ref(sessionStorage.getItem('scan2order_operator') || '')
+const operatorInputName = ref('')
 const showCreateOrder = ref(false)
 const isLoadingMenu = ref(false)
 const menuError = ref('')
@@ -354,6 +376,13 @@ onBeforeUnmount(() => {
     clearInterval(refreshIntervalId.value)
   }
 })
+
+function confirmOperator() {
+  const name = operatorInputName.value.trim()
+  if (!name) return
+  operatorName.value = name
+  sessionStorage.setItem('scan2order_operator', name)
+}
 
 function showToast(message, type = 'success') {
   toast.value = { show: true, type, message }
@@ -601,7 +630,7 @@ async function updateOrderStatus(orderId, status) {
       'Content-Type': 'application/json',
       Accept: 'application/json'
     },
-    body: JSON.stringify({ status })
+    body: JSON.stringify({ status, operator_name: operatorName.value || null })
   })
 
   if (!response.ok) {
@@ -675,12 +704,93 @@ async function markAsCancelled(order) {
   margin-bottom: 0.5rem;
 }
 
+.operator-label {
+  font-size: 0.95rem;
+  color: rgba(255,255,255,0.9);
+  margin-top: 0.25rem;
+}
+
 .content {
   background: white;
   border-radius: 10px;
   padding: 2rem;
   box-shadow: 0 8px 16px rgba(0, 0, 0, 0.1);
   position: relative;
+}
+
+.operator-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.65);
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.operator-modal {
+  background: white;
+  border-radius: 12px;
+  padding: 2rem 2.5rem;
+  max-width: 420px;
+  width: 100%;
+  text-align: center;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+}
+
+.operator-modal h2 {
+  font-size: 1.4rem;
+  margin-bottom: 0.75rem;
+  color: #2c3e50;
+}
+
+.operator-modal p {
+  color: #666;
+  font-size: 0.9rem;
+  margin-bottom: 1.25rem;
+}
+
+.operator-input {
+  width: 100%;
+  border: 2px solid #ddd;
+  border-radius: 8px;
+  padding: 0.75rem 1rem;
+  font-size: 1rem;
+  margin-bottom: 1rem;
+  box-sizing: border-box;
+  transition: border-color 0.2s;
+}
+
+.operator-input:focus {
+  outline: none;
+  border-color: #3498db;
+}
+
+.btn-operator-confirm {
+  width: 100%;
+  background: #27ae60;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  padding: 0.75rem;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.btn-operator-confirm:disabled {
+  background: #bdc3c7;
+  cursor: not-allowed;
+}
+
+.btn-operator-confirm:not(:disabled):hover {
+  background: #219a52;
+}
+
+.operator-tag {
+  color: #1565c0;
+  font-style: italic;
 }
 
 .actions-row {

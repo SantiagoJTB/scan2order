@@ -13,6 +13,7 @@ class Kernel extends ConsoleKernel
     protected function schedule(Schedule $schedule): void
     {
         $schedule->command('security:prune')->dailyAt('02:00');
+        $schedule->command('products:prune-orphan-images')->dailyAt('03:00');
     }
 
     /**

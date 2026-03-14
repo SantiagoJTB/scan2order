@@ -4,12 +4,136 @@ namespace App\Http\Controllers;
 
 use App\Models\User;
 use App\Models\Role;
+use App\Models\SystemSetting;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\DB;
 
 class UserController extends Controller
 {
+    private const DEFAULT_GLOBAL_USER_LIMIT = 1000;
+    private const DEFAULT_ADMIN_STAFF_LIMIT = 10;
+
+    private function globalUserLimit(): int
+    {
+        return SystemSetting::getInt('global_user_limit', self::DEFAULT_GLOBAL_USER_LIMIT);
+    }
+
+    private function defaultAdminStaffLimit(): int
+    {
+        return SystemSetting::getInt('default_admin_staff_limit', self::DEFAULT_ADMIN_STAFF_LIMIT);
+    }
+
+    private function resolveAdminStaffLimit(User $admin): int
+    {
+        $configured = $admin->staff_creation_limit;
+        if ($configured === null) {
+            return $this->defaultAdminStaffLimit();
+        }
+
+        return max(0, (int) $configured);
+    }
+
+    private function currentStaffCountForAdmin(int $adminId): int
+    {
+        return User::query()
+            ->where('created_by', $adminId)
+            ->whereHas('role', function ($query) {
+                $query->where('name', 'staff');
+            })
+            ->count();
+    }
+
+    private function canCreateStaffForAdmin(User $admin): bool
+    {
+        $current = $this->currentStaffCountForAdmin($admin->id);
+        return $current < $this->resolveAdminStaffLimit($admin);
+    }
+
+    public function getCreationLimits(Request $request)
+    {
+        $currentUser = $request->user();
+        if (!$currentUser || !$currentUser->hasRole('superadmin')) {
+            return response()->json(['message' => 'Unauthorized'], 403);
+        }
+
+        $admins = User::with('role')
+            ->whereHas('role', function ($query) {
+                $query->where('name', 'admin');
+            })
+            ->get()
+            ->map(function (User $admin) {
+                return [
+                    'id' => $admin->id,
+                    'name' => $admin->name,
+                    'email' => $admin->email,
+                    'staff_creation_limit' => $admin->staff_creation_limit,
+                    'effective_staff_creation_limit' => $this->resolveAdminStaffLimit($admin),
+                    'current_staff_count' => $this->currentStaffCountForAdmin($admin->id),
+                ];
+            })
+            ->values();
+
+        return response()->json([
+            'global_user_limit' => $this->globalUserLimit(),
+            'default_admin_staff_limit' => $this->defaultAdminStaffLimit(),
+            'current_total_users' => User::count(),
+            'admins' => $admins,
+        ]);
+    }
+
+    public function updateSystemLimits(Request $request)
+    {
+        $currentUser = $request->user();
+        if (!$currentUser || !$currentUser->hasRole('superadmin')) {
+            return response()->json(['message' => 'Unauthorized'], 403);
+        }
+
+        $data = $request->validate([
+            'global_user_limit' => 'required|integer|min:1|max:100000',
+            'default_admin_staff_limit' => 'required|integer|min:0|max:10000',
+        ]);
+
+        SystemSetting::setInt('global_user_limit', (int) $data['global_user_limit']);
+        SystemSetting::setInt('default_admin_staff_limit', (int) $data['default_admin_staff_limit']);
+
+        return response()->json([
+            'message' => 'Límites del sistema actualizados',
+            'global_user_limit' => $this->globalUserLimit(),
+            'default_admin_staff_limit' => $this->defaultAdminStaffLimit(),
+        ]);
+    }
+
+    public function updateAdminStaffLimit(Request $request, User $user)
+    {
+        $currentUser = $request->user();
+        if (!$currentUser || !$currentUser->hasRole('superadmin')) {
+            return response()->json(['message' => 'Unauthorized'], 403);
+        }
+
+        $user->loadMissing('role');
+        if ($user->role?->name !== 'admin') {
+            return response()->json(['message' => 'Solo se puede configurar límite a usuarios admin'], 422);
+        }
+
+        $data = $request->validate([
+            'staff_creation_limit' => 'nullable|integer|min:0|max:10000',
+        ]);
+
+        $user->update([
+            'staff_creation_limit' => array_key_exists('staff_creation_limit', $data)
+                ? $data['staff_creation_limit']
+                : null,
+        ]);
+
+        return response()->json([
+            'message' => 'Límite de staff actualizado',
+            'user' => $this->formatUser($user->fresh('role')),
+            'effective_staff_creation_limit' => $this->resolveAdminStaffLimit($user->fresh('role')),
+            'current_staff_count' => $this->currentStaffCountForAdmin($user->id),
+        ]);
+    }
+
     private function isLastActiveSuperadmin(User $user): bool
     {
         $user->loadMissing('role');
@@ -76,6 +200,13 @@ class UserController extends Controller
             return response()->json(['message' => 'Admin can only create staff users'], 403);
         }
 
+        $usersToCreate = $data['role'] === 'admin' ? 2 : 1;
+        if (User::count() + $usersToCreate > $this->globalUserLimit()) {
+            return response()->json([
+                'message' => 'Se alcanzó el límite global de usuarios configurado',
+            ], 422);
+        }
+
         // Create user
         $createdUsers = [];
         
@@ -89,6 +220,7 @@ class UserController extends Controller
                 'role_id' => $role->id,
                 'created_by' => $user->id,
                 'status' => 'active',
+                'staff_creation_limit' => $this->defaultAdminStaffLimit(),
             ]);
             $createdUsers[] = $this->formatUser($adminUser);
             $this->auditAction(
@@ -106,6 +238,12 @@ class UserController extends Controller
             $staffRole = Role::where('name', 'staff')->first();
 
             if ($staffRole) {
+                if (!$this->canCreateStaffForAdmin($adminUser)) {
+                    return response()->json([
+                        'message' => 'No se puede crear el staff automático: el admin alcanzó su límite de staff',
+                    ], 422);
+                }
+
                 $staffPassword = $data['staff_password'] ?? 'password123';
                 $staffUser = User::create([
                     'name' => "{$data['name']} - Staff",
@@ -129,6 +267,7 @@ class UserController extends Controller
             }
         } else {
             $createdBy = $user->id;
+            $adminForStaffLimit = null;
 
             if ($user->hasRole('superadmin') && $data['role'] === 'staff') {
                 $assignToAdmin = (bool) ($data['assign_to_admin'] ?? false);
@@ -144,9 +283,20 @@ class UserController extends Controller
                     }
 
                     $createdBy = $assignedAdmin->id;
+                    $adminForStaffLimit = $assignedAdmin;
                 } else {
                     $createdBy = null;
                 }
+            }
+
+            if ($user->hasRole('admin') && !$user->hasRole('superadmin') && $data['role'] === 'staff') {
+                $adminForStaffLimit = $user;
+            }
+
+            if ($adminForStaffLimit && !$this->canCreateStaffForAdmin($adminForStaffLimit)) {
+                return response()->json([
+                    'message' => 'El admin alcanzó su límite máximo de creación de staff',
+                ], 422);
             }
 
             // Create staff or cliente user
@@ -489,6 +639,7 @@ class UserController extends Controller
             'phone' => $user->phone,
             'status' => $user->status,
             'created_by' => $user->created_by,
+            'staff_creation_limit' => $user->staff_creation_limit,
             'role' => $user->role ? [
                 'id' => $user->role->id,
                 'name' => $user->role->name,

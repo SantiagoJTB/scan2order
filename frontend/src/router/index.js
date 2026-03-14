@@ -144,13 +144,13 @@ const routes = [
     path: '/caja/:restaurantId?',
     name: 'CajaPayments',
     component: CajaPayments,
-    meta: { requiresAuth: true, roles: ['staff'] }
+    meta: { requiresAuth: true, roles: ['staff', 'admin', 'superadmin'] }
   },
   {
     path: '/cocina/:restaurantId?',
     name: 'CocinaOrders',
     component: CocinaOrders,
-    meta: { requiresAuth: true, roles: ['staff'] }
+    meta: { requiresAuth: true, roles: ['staff', 'admin', 'superadmin'] }
   }
 ]
 

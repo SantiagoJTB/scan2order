@@ -175,6 +175,7 @@ class OrderController extends Controller
             'total' => 'numeric',
             'notes' => 'nullable|string',
             'delivery_address' => 'sometimes|nullable|string|max:500',
+            'operator_name' => 'sometimes|nullable|string|max:255',
         ]);
 
         $resultingMode = $this->resolveServiceMode($data, $order);

@@ -22,6 +22,8 @@ docker-compose.override.yml
 
 # NPM build output
 /frontend/dist/
+/frontend/test-results/
+/frontend/playwright-report/
 
 # OS files
 .DS_Store

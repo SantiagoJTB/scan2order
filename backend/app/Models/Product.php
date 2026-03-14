@@ -9,11 +9,12 @@ class Product extends Model
 {
     use HasFactory;
 
-    protected $fillable = ['restaurant_id', 'category_id', 'section_id', 'name', 'description', 'image', 'price', 'active'];
+    protected $fillable = ['restaurant_id', 'category_id', 'section_id', 'name', 'description', 'image', 'show_image', 'price', 'active'];
 
     protected $casts = [
         'price' => 'float',
         'active' => 'boolean',
+        'show_image' => 'boolean',
     ];
 
     public function restaurant()

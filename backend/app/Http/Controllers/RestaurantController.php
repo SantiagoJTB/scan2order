@@ -3,11 +3,13 @@
 namespace App\Http\Controllers;
 
 use App\Models\Role;
+use App\Models\Product;
 use App\Models\Restaurant;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Storage;
 
 class RestaurantController extends Controller
 {
@@ -191,6 +193,15 @@ class RestaurantController extends Controller
             if (!$isLinkedAdmin && $restaurant->created_by !== $user->id) {
                 return response()->json(['message' => 'Unauthorized'], 403);
             }
+        }
+
+        $images = Product::query()
+            ->where('restaurant_id', $restaurant->id)
+            ->whereNotNull('image')
+            ->pluck('image');
+
+        foreach ($images as $image) {
+            Storage::delete('public/' . $image);
         }
 
         $restaurant->delete();

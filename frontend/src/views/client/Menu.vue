@@ -22,10 +22,6 @@
             placeholder="Buscar productos..."
             class="search-input"
           />
-          <label class="toggle-images">
-            <input v-model="showImages" type="checkbox" />
-            <span>Mostrar imágenes</span>
-          </label>
         </div>
       </div>
 
@@ -62,18 +58,17 @@
             </p>
           </div>
 
-          <div v-if="filteredCurrentProducts.length > 0" :class="['products-grid', { compact: !showImages }]">
+          <div v-if="filteredCurrentProducts.length > 0" class="products-grid">
             <div 
               v-for="product in filteredCurrentProducts" 
               :key="product.id" 
-              :class="['product-card', { compact: !showImages, expanded: isProductExpanded(product.id) }]"
+              :class="['product-card', { compact: !shouldDisplayProductImage(product), expanded: isProductExpanded(product.id) }]"
               @click="toggleProductDescription(product.id, Boolean(product.description))"
             >
-              <div v-if="showImages" class="product-image">
-                <img v-if="product.image" :src="`/storage/${product.image}`" :alt="product.name" />
-                <div v-else class="image-placeholder">{{ product.name.charAt(0) }}</div>
+              <div v-if="shouldDisplayProductImage(product)" class="product-image">
+                <img :src="`/storage/${product.image}`" :alt="product.name" />
               </div>
-              <div :class="['product-info', { compact: !showImages }]">
+              <div :class="['product-info', { compact: !shouldDisplayProductImage(product) }]">
                 <h3>{{ product.name }}</h3>
                 <p
                   v-if="product.description"
@@ -127,7 +122,6 @@ const catalogs = ref([])
 const restaurant = ref(null)
 const searchText = ref('')
 const selectedSection = ref(null)
-const showImages = ref(false)
 const expandedProductIds = ref(new Set())
 
 // Flatten all sections from all catalogs
@@ -189,6 +183,10 @@ function filterProducts(products) {
     p.name.toLowerCase().includes(search) ||
     (p.description && p.description.toLowerCase().includes(search))
   )
+}
+
+function shouldDisplayProductImage(product) {
+  return Boolean(product?.image) && product?.show_image !== false
 }
 
 async function fetchRestaurant(id) {

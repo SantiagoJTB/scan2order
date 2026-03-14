@@ -41,11 +41,35 @@ services:
       - APP_ENV=local
       - APP_DEBUG=true
       - APP_URL=http://192.168.1.132:8080
-    entrypoint: ["sh","-c","cp /var/www/html/.env.example /var/www/html/.env && php artisan key:generate --force && php artisan migrate --force && chown -R www-data:www-data /var/www/html/storage /var/www/html/bootstrap/cache && php-fpm"]
+    entrypoint: ["sh","-c","cp /var/www/html/.env.example /var/www/html/.env && php artisan key:generate --force && php artisan migrate --force && php artisan storage:link --force && chown -R www-data:www-data /var/www/html/storage /var/www/html/bootstrap/cache && php-fpm"]
     ports:
       - "9000:9000"
     depends_on:
       mailpit:
+        condition: service_started
+      db:
+        condition: service_healthy
+
+  scheduler:
+    build:
+      context: ./backend
+      dockerfile: ../docker/php/Dockerfile
+    container_name: scan2order-scheduler
+    volumes:
+      - ./backend:/var/www/html
+    environment:
+      - DB_CONNECTION=pgsql
+      - DB_HOST=db
+      - DB_PORT=5432
+      - DB_DATABASE=scan2order
+      - DB_USERNAME=postgres
+      - DB_PASSWORD=password
+      - APP_ENV=local
+      - APP_DEBUG=true
+      - APP_URL=http://192.168.1.132:8080
+    entrypoint: ["sh","-c","until [ -f /var/www/html/.env ]; do echo 'Waiting for backend .env...'; sleep 2; done; php artisan schedule:work"]
+    depends_on:
+      backend:
         condition: service_started
       db:
         condition: service_healthy
@@ -74,6 +98,7 @@ services:
       - frontend
     volumes:
       - frontend_dist:/usr/share/nginx/html:ro
+      - ./backend/storage/app/public:/var/www/html/public/storage:ro
 
 volumes:
   pgdata:

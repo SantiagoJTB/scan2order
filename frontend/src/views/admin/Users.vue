@@ -17,6 +17,26 @@
 
       <!-- Vista para SUPERADMIN: Usuarios agrupados -->
       <div v-if="!isLoading && auth.hasRole('superadmin')">
+        <div class="section limits-section">
+          <h2 class="section-title">⚙️ Límites de creación</h2>
+          <div class="limits-grid">
+            <label class="limit-field">
+              <span>Límite global de usuarios</span>
+              <input v-model.number="systemLimits.global_user_limit" type="number" min="1" />
+            </label>
+            <label class="limit-field">
+              <span>Límite por defecto de staff por admin</span>
+              <input v-model.number="systemLimits.default_admin_staff_limit" type="number" min="0" />
+            </label>
+            <div class="limit-summary">
+              Usuarios actuales: <strong>{{ currentTotalUsers }}</strong>
+            </div>
+            <button class="btn-save-limit" :disabled="isSavingSystemLimits" @click="saveSystemLimits">
+              {{ isSavingSystemLimits ? 'Guardando...' : 'Guardar límites del sistema' }}
+            </button>
+          </div>
+        </div>
+
         <!-- Sección de Admins -->
         <div v-if="adminGroups.length > 0" class="section">
           <h2 class="section-title">👨‍💼 Administradores y sus equipos</h2>
@@ -46,14 +66,6 @@
                 >
                   ✏️
                 </button>
-                <button
-                  v-if="canChangePasswordUser(group.admin)"
-                  @click="openPasswordModal(group.admin)"
-                  class="btn-action"
-                  title="Cambiar contraseña"
-                >
-                  🔑
-                </button>
                 <button 
                   v-if="canChangeStatus(group.admin)"
                   @click="changeStatus(group.admin)" 
@@ -62,14 +74,26 @@
                 >
                   🔄
                 </button>
-                <button 
-                  v-if="canDeleteUser(group.admin)"
-                  @click="openDeleteModal(group.admin)" 
-                  class="btn-delete" 
-                  title="Eliminar usuario"
-                >
-                  🗑️
-                </button>
+              </div>
+              <div class="admin-limit-box">
+                <div class="admin-limit-meta">
+                  Staff creados: <strong>{{ group.team.length }}</strong> / <strong>{{ getAdminEffectiveLimit(group.admin.id) }}</strong>
+                </div>
+                <div class="admin-limit-controls">
+                  <input
+                    v-model.number="adminLimitInputs[group.admin.id]"
+                    type="number"
+                    min="0"
+                    class="admin-limit-input"
+                  />
+                  <button
+                    class="btn-save-limit btn-save-limit-small"
+                    :disabled="isSavingAdminLimitId === group.admin.id"
+                    @click="saveAdminLimit(group.admin.id)"
+                  >
+                    {{ isSavingAdminLimitId === group.admin.id ? 'Guardando...' : 'Guardar límite' }}
+                  </button>
+                </div>
               </div>
               <div v-if="group.team && group.team.length > 0" class="admin-staff-inline">
                 <div class="team-members team-members--inside">
@@ -100,14 +124,6 @@
                       >
                         ✏️
                       </button>
-                      <button
-                        v-if="canChangePasswordUser(member)"
-                        @click="openPasswordModal(member)"
-                        class="btn-action-small"
-                        title="Cambiar contraseña"
-                      >
-                        🔑
-                      </button>
                       <button 
                         v-if="canChangeStatus(member)"
                         @click="changeStatus(member)" 
@@ -115,14 +131,6 @@
                         title="Cambiar estado"
                       >
                         🔄
-                      </button>
-                      <button 
-                        v-if="canDeleteUser(member)"
-                        @click="openDeleteModal(member)" 
-                        class="btn-delete-small" 
-                        title="Eliminar usuario"
-                      >
-                        🗑️
                       </button>
                     </div>
                   </div>
@@ -164,28 +172,12 @@
                   ✏️
                 </button>
                 <button
-                  v-if="canChangePasswordUser(member)"
-                  @click="openPasswordModal(member)"
-                  class="btn-action-small"
-                  title="Cambiar contraseña"
-                >
-                  🔑
-                </button>
-                <button
                   v-if="canChangeStatus(member)"
                   @click="changeStatus(member)"
                   class="btn-action-small"
                   title="Cambiar estado"
                 >
                   🔄
-                </button>
-                <button
-                  v-if="canDeleteUser(member)"
-                  @click="openDeleteModal(member)"
-                  class="btn-delete-small"
-                  title="Eliminar usuario"
-                >
-                  🗑️
                 </button>
               </div>
             </div>
@@ -221,14 +213,6 @@
                 >
                   ✏️
                 </button>
-                <button
-                  v-if="canChangePasswordUser(client)"
-                  @click="openPasswordModal(client)"
-                  class="btn-action"
-                  title="Cambiar contraseña"
-                >
-                  🔑
-                </button>
                 <button 
                   v-if="canChangeStatus(client)"
                   @click="changeStatus(client)" 
@@ -236,14 +220,6 @@
                   title="Cambiar estado"
                 >
                   🔄
-                </button>
-                <button 
-                  v-if="canDeleteUser(client)"
-                  @click="openDeleteModal(client)" 
-                  class="btn-delete" 
-                  title="Eliminar usuario"
-                >
-                  🗑️
                 </button>
               </div>
             </div>
@@ -286,14 +262,6 @@
             >
               ✏️
             </button>
-            <button 
-              v-if="canChangePasswordUser(user)"
-              @click="openPasswordModal(user)"
-              class="btn-action"
-              title="Cambiar contraseña"
-            >
-              🔑
-            </button>
             <button
               v-if="canChangeStatus(user)"
               @click="changeStatus(user)" 
@@ -301,14 +269,6 @@
               title="Cambiar estado"
             >
               🔄
-            </button>
-            <button 
-              v-if="canDeleteUser(user)"
-              @click="openDeleteModal(user)" 
-              class="btn-delete"
-              title="Eliminar usuario"
-            >
-              🗑️
             </button>
           </div>
         </div>
@@ -480,6 +440,25 @@
             />
           </div>
 
+          <div v-if="userToEdit" class="edit-extra-actions">
+            <button
+              v-if="canChangePasswordUser(userToEdit)"
+              type="button"
+              @click="openPasswordFromEdit"
+              class="btn-edit-secondary"
+            >
+              🔑 Cambiar contraseña
+            </button>
+            <button
+              v-if="canDeleteUser(userToEdit)"
+              type="button"
+              @click="openDeleteFromEdit"
+              class="btn-edit-danger"
+            >
+              🗑️ Eliminar usuario
+            </button>
+          </div>
+
           <div v-if="editError" class="error">{{ editError }}</div>
 
           <div class="form-actions">
@@ -601,9 +580,19 @@ const isDeleting = ref(false)
 const isCreating = ref(false)
 const isUpdating = ref(false)
 const isChangingPassword = ref(false)
+const isLoadingLimits = ref(false)
+const isSavingSystemLimits = ref(false)
+const isSavingAdminLimitId = ref(null)
 const createError = ref(null)
 const editError = ref(null)
 const passwordError = ref(null)
+const systemLimits = ref({
+  global_user_limit: 1000,
+  default_admin_staff_limit: 10,
+})
+const currentTotalUsers = ref(0)
+const adminLimitInputs = ref({})
+const adminLimitsById = ref({})
 const passwordData = ref({
   password: '',
   password_confirmation: ''
@@ -768,6 +757,111 @@ async function fetchUsers() {
   }
 }
 
+async function fetchCreationLimits() {
+  if (!auth.hasRole('superadmin')) return
+
+  isLoadingLimits.value = true
+  try {
+    const response = await fetch('/api/users/limits', {
+      headers: {
+        'Authorization': `Bearer ${auth.token}`,
+        'Accept': 'application/json'
+      }
+    })
+
+    if (!response.ok) throw new Error('No se pudieron cargar los límites de creación')
+
+    const data = await response.json()
+    systemLimits.value = {
+      global_user_limit: Number(data.global_user_limit || 1000),
+      default_admin_staff_limit: Number(data.default_admin_staff_limit || 10),
+    }
+    currentTotalUsers.value = Number(data.current_total_users || 0)
+
+    const nextLimitsById = {}
+    const nextInputs = {}
+    ;(Array.isArray(data.admins) ? data.admins : []).forEach((admin) => {
+      const effective = Number(admin.effective_staff_creation_limit || 0)
+      nextLimitsById[admin.id] = effective
+      nextInputs[admin.id] = effective
+    })
+
+    adminLimitsById.value = nextLimitsById
+    adminLimitInputs.value = nextInputs
+  } catch (err) {
+    showToast(err.message, 'error')
+  } finally {
+    isLoadingLimits.value = false
+  }
+}
+
+function getAdminEffectiveLimit(adminId) {
+  return adminLimitsById.value[adminId] ?? systemLimits.value.default_admin_staff_limit
+}
+
+async function saveSystemLimits() {
+  if (!auth.hasRole('superadmin')) return
+
+  isSavingSystemLimits.value = true
+  try {
+    const response = await fetch('/api/users/limits/system', {
+      method: 'PATCH',
+      headers: {
+        'Authorization': `Bearer ${auth.token}`,
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'
+      },
+      body: JSON.stringify({
+        global_user_limit: Number(systemLimits.value.global_user_limit || 0),
+        default_admin_staff_limit: Number(systemLimits.value.default_admin_staff_limit || 0),
+      })
+    })
+
+    const data = await response.json().catch(() => null)
+    if (!response.ok) {
+      throw new Error(data?.message || 'No se pudieron guardar los límites del sistema')
+    }
+
+    showToast('Límites del sistema actualizados', 'success')
+    await fetchCreationLimits()
+  } catch (err) {
+    showToast(err.message, 'error')
+  } finally {
+    isSavingSystemLimits.value = false
+  }
+}
+
+async function saveAdminLimit(adminId) {
+  if (!auth.hasRole('superadmin')) return
+
+  isSavingAdminLimitId.value = adminId
+  try {
+    const response = await fetch(`/api/users/${adminId}/staff-limit`, {
+      method: 'PATCH',
+      headers: {
+        'Authorization': `Bearer ${auth.token}`,
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'
+      },
+      body: JSON.stringify({
+        staff_creation_limit: Number(adminLimitInputs.value[adminId] || 0)
+      })
+    })
+
+    const data = await response.json().catch(() => null)
+    if (!response.ok) {
+      throw new Error(data?.message || 'No se pudo guardar el límite del admin')
+    }
+
+    showToast('Límite de staff actualizado', 'success')
+    await fetchCreationLimits()
+  } catch (err) {
+    showToast(err.message, 'error')
+  } finally {
+    isSavingAdminLimitId.value = null
+  }
+}
+
 async function createUser() {
   if (!canManageUsers.value) {
     showToast('No autorizado para crear usuarios', 'error')
@@ -839,6 +933,7 @@ async function createUser() {
     
     // Refresh users list
     await fetchUsers()
+    await fetchCreationLimits()
     showToast('Usuario creado correctamente', 'success')
   } catch (err) {
     createError.value = err.message
@@ -903,6 +998,20 @@ function cancelEdit() {
   userToEdit.value = null
   editError.value = null
   editUser.value = { name: '', email: '', phone: '' }
+}
+
+function openPasswordFromEdit() {
+  if (!userToEdit.value) return
+  const targetUser = userToEdit.value
+  cancelEdit()
+  openPasswordModal(targetUser)
+}
+
+function openDeleteFromEdit() {
+  if (!userToEdit.value) return
+  const targetUser = userToEdit.value
+  cancelEdit()
+  openDeleteModal(targetUser)
 }
 
 async function confirmEdit() {
@@ -1002,6 +1111,7 @@ async function confirmDelete() {
 
     cancelDelete()
     await fetchUsers()
+    await fetchCreationLimits()
     showToast('Usuario eliminado correctamente', 'success')
   } catch (err) {
     error.value = err.message
@@ -1081,8 +1191,9 @@ async function confirmPasswordChange() {
   }
 }
 
-onMounted(() => {
-  fetchUsers()
+onMounted(async () => {
+  await fetchUsers()
+  await fetchCreationLimits()
 })
 </script>
 
@@ -1157,6 +1268,88 @@ onMounted(() => {
   background: #ffe6e6;
   color: #c0392b;
   border-radius: 5px;
+}
+
+.limits-section {
+  border: 1px solid #e5ecf5;
+  border-radius: 10px;
+  padding: 1rem;
+  margin-bottom: 1rem;
+  background: #f8fbff;
+}
+
+.limits-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 0.75rem;
+  align-items: end;
+}
+
+.limit-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  color: #2c3e50;
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+.limit-field input {
+  border: 1px solid #d9e3ef;
+  border-radius: 6px;
+  padding: 0.55rem 0.65rem;
+}
+
+.limit-summary {
+  color: #2c3e50;
+  font-size: 0.95rem;
+}
+
+.btn-save-limit {
+  border: none;
+  border-radius: 6px;
+  background: #667eea;
+  color: white;
+  padding: 0.6rem 0.85rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.btn-save-limit:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+.admin-limit-box {
+  margin-top: 0.75rem;
+  border: 1px solid #e6edf6;
+  border-radius: 8px;
+  padding: 0.6rem;
+  background: #fbfcff;
+}
+
+.admin-limit-meta {
+  color: #2c3e50;
+  font-size: 0.9rem;
+  margin-bottom: 0.45rem;
+}
+
+.admin-limit-controls {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.admin-limit-input {
+  width: 90px;
+  border: 1px solid #d9e3ef;
+  border-radius: 6px;
+  padding: 0.45rem 0.55rem;
+}
+
+.btn-save-limit-small {
+  padding: 0.45rem 0.7rem;
+  font-size: 0.85rem;
 }
 
 .users-table {
@@ -1252,6 +1445,40 @@ onMounted(() => {
 
 .btn-action:hover {
   opacity: 0.8;
+}
+
+.edit-extra-actions {
+  display: flex;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+  flex-wrap: wrap;
+}
+
+.btn-edit-secondary,
+.btn-edit-danger {
+  border: none;
+  border-radius: 6px;
+  padding: 0.75rem 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.3s ease;
+}
+
+.btn-edit-secondary {
+  background: #f4f6fb;
+  color: #334155;
+  border: 1px solid #cbd5e1;
+}
+
+.btn-edit-danger {
+  background: #fdecec;
+  color: #c0392b;
+  border: 1px solid #f5b7b1;
+}
+
+.btn-edit-secondary:hover,
+.btn-edit-danger:hover {
+  opacity: 0.85;
 }
 
 .btn-delete {

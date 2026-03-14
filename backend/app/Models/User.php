@@ -25,6 +25,7 @@ class User extends Authenticatable
         'role_id',
         'created_by',
         'status',
+        'staff_creation_limit',
         'mfa_secret',
         'mfa_enabled_at',
     ];
