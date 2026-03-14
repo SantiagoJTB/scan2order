@@ -216,13 +216,11 @@ class SecurityOverviewController extends Controller
         return response()->json([
             'ok' => true,
             'mode' => 'manual-secure',
-            'message' => 'Control de contenedores desde la app deshabilitado por seguridad. Usa SSH/VPN y scripts locales.',
+            'message' => 'Guardian en operación continua con protecciones anti-bucle y auto-desconexión por fallos. El control desde la app está deshabilitado por seguridad; usa SSH/VPN.',
             'commands' => [
                 'check' => './ops/container-guardian.sh check long',
                 'heal' => './ops/container-guardian.sh heal long',
                 'restart_all' => './ops/container-guardian.sh restart all',
-                'start_watchdog' => './ops/start-guardian.sh long',
-                'stop_watchdog' => './ops/stop-guardian.sh',
                 'emergency_restore' => './ops/emergency-recover.sh latest',
             ],
             'checked_at' => now()->toIso8601String(),
@@ -239,7 +237,7 @@ class SecurityOverviewController extends Controller
         }
 
         $validated = $request->validate([
-            'action' => 'required|in:heal,restart,start_daemon,stop_daemon',
+            'action' => 'required|in:heal,restart',
             'target' => 'nullable|in:all,mailpit,db,backend,scheduler,frontend,nginx',
             'reason' => 'nullable|string|max:500',
             'confirmed' => 'required|accepted',
@@ -271,8 +269,6 @@ class SecurityOverviewController extends Controller
             'manual_command' => match ($action) {
                 'heal' => './ops/container-guardian.sh heal long',
                 'restart' => './ops/container-guardian.sh restart ' . ($target ?: 'all'),
-                'start_daemon' => './ops/start-guardian.sh long',
-                'stop_daemon' => './ops/stop-guardian.sh',
                 default => null,
             },
         ]);

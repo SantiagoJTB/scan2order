@@ -13,12 +13,14 @@ describe('Caja Payments.vue pending filter', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
     localStorage.clear()
+    sessionStorage.clear()
   })
 
   it('does not show already collected orders in pending list', async () => {
     const auth = useAuthStore()
     auth.user = { role: { name: 'staff' } }
     auth.token = 'token-test'
+    sessionStorage.setItem('scan2order_operator', 'Operador Test')
 
     global.fetch = vi.fn().mockResolvedValue({
       ok: true,

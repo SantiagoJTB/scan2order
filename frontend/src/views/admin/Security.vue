@@ -18,14 +18,15 @@
 
       <div class="content emergency-wrapper">
         <div class="table-header-row">
-          <h2>Protocolo de emergencia</h2>
-          <button class="btn-refresh" @click="fetchHealth" :disabled="isActionLoading">
-            {{ isActionLoading ? 'Procesando...' : 'Verificar estado ahora' }}
+          <h2>Protocolo de emergencia y Autoanalizador de contenedores</h2>
+          <button class="btn-refresh" @click="refreshUnifiedPanel" :disabled="isActionLoading || isGuardianLoading">
+            {{ isActionLoading || isGuardianLoading ? 'Procesando...' : 'Actualizar estado' }}
           </button>
         </div>
+
         <p class="emergency-help">
-          Si ocurre un incidente, registra la activación del protocolo y ejecuta verificación de contingencia.
-          Ambas acciones quedarán auditadas en este panel.
+          Guardian opera en modo continuo supervisado. Incluye protección anti-bucle y auto-desconexión por fallos repetidos.
+          Aquí puedes registrar protocolo, verificar contingencia y ejecutar recuperación puntual (heal/restart), todo auditado.
         </p>
 
         <div class="health-grid" v-if="healthCheck">
@@ -38,6 +39,10 @@
           <div class="health-item">Revisión: <strong>{{ formatDate(healthCheck.checked_at) }}</strong></div>
         </div>
 
+        <div v-if="guardianOutput" class="guardian-output">
+          <pre>{{ guardianOutput }}</pre>
+        </div>
+
         <div class="emergency-actions">
           <button class="btn-danger" :disabled="isActionLoading" @click="askConfirm('activate_protocol')">
             Activar protocolo de emergencia
@@ -45,43 +50,12 @@
           <button class="btn-warning" :disabled="isActionLoading" @click="askConfirm('run_contingency_check')">
             Ejecutar verificación de contingencia
           </button>
-        </div>
-      </div>
-
-      <div class="content emergency-wrapper">
-        <div class="table-header-row">
-          <h2>Autoanalizador de contenedores</h2>
-          <button class="btn-refresh" @click="fetchGuardianStatus" :disabled="isGuardianLoading">
-            {{ isGuardianLoading ? 'Consultando...' : 'Ver estado guardian' }}
-          </button>
-        </div>
-
-        <p class="emergency-help">
-          Permite revisar estado y ejecutar acciones de recuperación (heal/restart/start/stop) con confirmación.
-          Todas las acciones quedan auditadas.
-        </p>
-
-        <div v-if="guardianOutput" class="guardian-output">
-          <pre>{{ guardianOutput }}</pre>
-        </div>
-
-        <div class="emergency-actions">
           <button class="btn-warning" :disabled="isGuardianLoading" @click="askGuardianConfirm('heal')">
             Heal automático
           </button>
           <button class="btn-danger" :disabled="isGuardianLoading" @click="askGuardianConfirm('restart')">
             Reiniciar todos los contenedores
           </button>
-          <label class="guardian-switch" :class="{ disabled: isGuardianLoading }">
-            <input
-              type="checkbox"
-              :checked="guardianEnabled"
-              :disabled="isGuardianLoading"
-              @change="onGuardianToggle($event)"
-            />
-            <span class="guardian-slider"></span>
-            <span class="guardian-switch-text">Guardian {{ guardianEnabled ? 'ACTIVO' : 'INACTIVO' }}</span>
-          </label>
         </div>
       </div>
 
@@ -235,7 +209,6 @@ const healthCheck = ref(null)
 const isActionLoading = ref(false)
 const guardianOutput = ref('')
 const isGuardianLoading = ref(false)
-const guardianEnabled = ref(false)
 const showGuardianConfirmModal = ref(false)
 const guardianConfirmChecked = ref(false)
 const guardianConfirmReason = ref('')
@@ -261,8 +234,6 @@ const confirmMessage = computed(() => {
 })
 
 const guardianActionLabel = computed(() => {
-  if (pendingGuardianAction.value === 'start_daemon') return 'activar guardian'
-  if (pendingGuardianAction.value === 'stop_daemon') return 'desactivar guardian'
   if (pendingGuardianAction.value === 'heal') return 'heal automático'
   if (pendingGuardianAction.value === 'restart') return 'reiniciar todos los contenedores'
   return pendingGuardianAction.value || 'acción'
@@ -356,11 +327,6 @@ function askGuardianConfirm(action) {
   showGuardianConfirmModal.value = true
 }
 
-function onGuardianToggle(event) {
-  const checked = Boolean(event?.target?.checked)
-  askGuardianConfirm(checked ? 'start_daemon' : 'stop_daemon')
-}
-
 function cancelGuardianConfirm() {
   showGuardianConfirmModal.value = false
   guardianConfirmChecked.value = false
@@ -447,6 +413,10 @@ async function fetchGuardianStatus() {
   }
 }
 
+async function refreshUnifiedPanel() {
+  await Promise.all([fetchHealth(), fetchGuardianStatus()])
+}
+
 async function executeGuardianAction() {
   if (!pendingGuardianAction.value) return
 
@@ -480,14 +450,6 @@ async function executeGuardianAction() {
       ? `Ejecuta manualmente:\n${data.manual_command}`
       : (data?.message || 'Acción registrada')
 
-    if (pendingGuardianAction.value === 'start_daemon') {
-      guardianEnabled.value = true
-    }
-
-    if (pendingGuardianAction.value === 'stop_daemon') {
-      guardianEnabled.value = false
-    }
-
     cancelGuardianConfirm()
     await fetchOverview()
   } catch (err) {
@@ -512,8 +474,7 @@ onMounted(async () => {
   }
 
   await fetchOverview()
-  await fetchHealth()
-  await fetchGuardianStatus()
+  await refreshUnifiedPanel()
 })
 </script>
 
@@ -739,57 +700,6 @@ onMounted(async () => {
 
 .guardian-output {
   margin-bottom: 0.8rem;
-}
-
-.guardian-switch {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.55rem;
-  cursor: pointer;
-}
-
-.guardian-switch input {
-  display: none;
-}
-
-.guardian-slider {
-  width: 44px;
-  height: 24px;
-  border-radius: 999px;
-  background: #cbd5e1;
-  position: relative;
-  transition: background 0.25s ease;
-}
-
-.guardian-slider::after {
-  content: '';
-  width: 18px;
-  height: 18px;
-  background: #fff;
-  border-radius: 999px;
-  position: absolute;
-  top: 3px;
-  left: 3px;
-  transition: transform 0.25s ease;
-}
-
-.guardian-switch input:checked + .guardian-slider {
-  background: #22c55e;
-}
-
-.guardian-switch input:checked + .guardian-slider::after {
-  transform: translateX(20px);
-}
-
-.guardian-switch-text {
-  font-weight: 700;
-  color: #334155;
-  font-size: 0.86rem;
-}
-
-.guardian-switch.disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
 }
 
 .guardian-output pre {
