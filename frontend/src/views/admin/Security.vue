@@ -393,6 +393,7 @@ async function executeConfirmedAction() {
       body: JSON.stringify({
         action: pendingAction.value,
         reason: confirmReason.value || null,
+        confirmed: true,
       }),
     })
 
@@ -465,6 +466,7 @@ async function executeGuardianAction() {
         action: pendingGuardianAction.value,
         target: pendingGuardianAction.value === 'restart' ? 'all' : null,
         reason: guardianConfirmReason.value || null,
+        confirmed: true,
       }),
     })
 

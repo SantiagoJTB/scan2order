@@ -141,6 +141,7 @@ class SecurityOverviewController extends Controller
         $validated = $request->validate([
             'action' => 'required|in:activate_protocol,run_contingency_check',
             'reason' => 'nullable|string|max:500',
+            'confirmed' => 'required|accepted',
         ]);
 
         $action = $validated['action'];
@@ -217,12 +218,12 @@ class SecurityOverviewController extends Controller
             'mode' => 'manual-secure',
             'message' => 'Control de contenedores desde la app deshabilitado por seguridad. Usa SSH/VPN y scripts locales.',
             'commands' => [
-                'check' => './container-guardian.sh check long',
-                'heal' => './container-guardian.sh heal long',
-                'restart_all' => './container-guardian.sh restart all',
-                'start_watchdog' => './start-guardian.sh long',
-                'stop_watchdog' => './stop-guardian.sh',
-                'emergency_restore' => './emergency-recover.sh latest',
+                'check' => './ops/container-guardian.sh check long',
+                'heal' => './ops/container-guardian.sh heal long',
+                'restart_all' => './ops/container-guardian.sh restart all',
+                'start_watchdog' => './ops/start-guardian.sh long',
+                'stop_watchdog' => './ops/stop-guardian.sh',
+                'emergency_restore' => './ops/emergency-recover.sh latest',
             ],
             'checked_at' => now()->toIso8601String(),
         ]);
@@ -241,6 +242,7 @@ class SecurityOverviewController extends Controller
             'action' => 'required|in:heal,restart,start_daemon,stop_daemon',
             'target' => 'nullable|in:all,mailpit,db,backend,scheduler,frontend,nginx',
             'reason' => 'nullable|string|max:500',
+            'confirmed' => 'required|accepted',
         ]);
 
         $action = $validated['action'];
@@ -267,10 +269,10 @@ class SecurityOverviewController extends Controller
             'ok' => true,
             'message' => 'Acción registrada. Por seguridad, ejecútala manualmente por SSH/VPN en el servidor.',
             'manual_command' => match ($action) {
-                'heal' => './container-guardian.sh heal long',
-                'restart' => './container-guardian.sh restart ' . ($target ?: 'all'),
-                'start_daemon' => './start-guardian.sh long',
-                'stop_daemon' => './stop-guardian.sh',
+                'heal' => './ops/container-guardian.sh heal long',
+                'restart' => './ops/container-guardian.sh restart ' . ($target ?: 'all'),
+                'start_daemon' => './ops/start-guardian.sh long',
+                'stop_daemon' => './ops/stop-guardian.sh',
                 default => null,
             },
         ]);
@@ -292,6 +294,7 @@ class SecurityOverviewController extends Controller
         try {
             $disk = Storage::disk('public');
             $probeFile = 'health/.probe';
+            $disk->makeDirectory('health');
             $disk->put($probeFile, now()->toIso8601String());
             $storageOk = $disk->exists($probeFile);
             $disk->delete($probeFile);
