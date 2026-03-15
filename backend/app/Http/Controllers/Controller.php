@@ -69,19 +69,6 @@ class Controller extends BaseController
         if ($user->hasAnyRole(['staff'])) {
             $linkedIds = $user->restaurants()->pluck('restaurants.id')->all();
 
-            if ($user->created_by) {
-                $creatorAdminIds = Restaurant::query()
-                    ->where(function (Builder $query) use ($user) {
-                        $query->whereHas('admins', function (Builder $adminQuery) use ($user) {
-                            $adminQuery->where('users.id', $user->created_by);
-                        })->orWhere('created_by', $user->created_by);
-                    })
-                    ->pluck('id')
-                    ->all();
-
-                $linkedIds = array_merge($linkedIds, $creatorAdminIds);
-            }
-
             return array_values(array_unique(array_map('intval', $linkedIds)));
         }
 

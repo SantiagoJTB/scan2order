@@ -231,12 +231,12 @@ function saveCard() {
 .profile-container {
   min-height: 100vh;
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  padding: 2rem;
+  padding: max(1rem, env(safe-area-inset-top)) 1rem max(2rem, env(safe-area-inset-bottom));
 }
 
 .toast {
   position: fixed;
-  top: 1.5rem;
+  top: calc(env(safe-area-inset-top) + 1rem);
   right: 1.5rem;
   z-index: 2000;
   padding: 0.85rem 1rem;
@@ -273,7 +273,7 @@ function saveCard() {
 }
 
 .profile-content {
-  max-width: 600px;
+  max-width: 720px;
   margin: 0 auto;
 }
 
@@ -286,8 +286,8 @@ function saveCard() {
 
 .profile-card {
   background: white;
-  border-radius: 12px;
-  padding: 2rem;
+  border-radius: 24px;
+  padding: clamp(1.5rem, 4vw, 2.25rem);
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
 }
 
@@ -374,13 +374,15 @@ function saveCard() {
   gap: 1rem;
   justify-content: center;
   margin-top: 2rem;
+  flex-wrap: wrap;
 }
 
 .btn-primary,
 .btn-danger {
-  padding: 0.75rem 1.5rem;
+  min-height: 52px;
+  padding: 0.85rem 1.5rem;
   border: none;
-  border-radius: 8px;
+  border-radius: 14px;
   font-size: 1rem;
   font-weight: 600;
   cursor: pointer;
@@ -419,11 +421,12 @@ function saveCard() {
   align-items: center;
   justify-content: center;
   z-index: 1000;
+  padding: 1rem;
 }
 
 .modal {
   background: white;
-  border-radius: 12px;
+  border-radius: 20px;
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
   max-width: 500px;
   width: 100%;
@@ -515,6 +518,12 @@ function saveCard() {
 }
 
 @media (max-width: 768px) {
+  .toast {
+    left: 1rem;
+    right: 1rem;
+    text-align: center;
+  }
+
   .profile-header h1 {
     font-size: 1.8rem;
   }

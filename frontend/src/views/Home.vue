@@ -185,12 +185,13 @@ function initAOS() {
 .home-container {
   min-height: 100vh;
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  overflow-x: hidden;
 }
 
 /* Hero Section */
 .hero-section {
   position: relative;
-  padding: 4rem 1.5rem 8rem;
+  padding: max(2.5rem, calc(env(safe-area-inset-top) + 1.5rem)) 1.5rem 8rem;
   background: linear-gradient(135deg, rgba(102, 126, 234, 0.95) 0%, rgba(118, 75, 162, 0.95) 100%);
   overflow: hidden;
 }
@@ -221,6 +222,7 @@ function initAOS() {
 .hero-column {
   display: flex;
   flex-direction: column;
+  min-width: 0;
 }
 
 .auth-column {
@@ -240,6 +242,7 @@ function initAOS() {
   padding: 2.5rem;
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
   text-align: center;
+  width: 100%;
 }
 
 .auth-hero-card .auth-icon,
@@ -397,7 +400,7 @@ function initAOS() {
 .main-content {
   background: #f8f9fa;
   min-height: 100vh;
-  padding: 3rem 1.5rem;
+  padding: 3rem 1.5rem 4rem;
 }
 
 .content-wrapper {
@@ -580,6 +583,9 @@ function initAOS() {
 
 .card-content {
   padding: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.8rem;
 }
 
 .card-title {
@@ -593,7 +599,7 @@ function initAOS() {
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
-  margin-bottom: 1rem;
+  margin-bottom: 0.25rem;
 }
 
 .detail-item {
@@ -622,6 +628,7 @@ function initAOS() {
   align-items: center;
   padding-top: 1rem;
   border-top: 2px solid #ecf0f1;
+  gap: 1rem;
 }
 
 .view-menu {
@@ -662,6 +669,7 @@ function initAOS() {
   .auth-hero-card,
   .welcome-hero-card {
     padding: 2rem;
+    border-radius: 20px;
   }
 
   .auth-hero-card h2,
@@ -678,13 +686,30 @@ function initAOS() {
     padding: 2rem 1rem;
   }
 
+  .section-header {
+    margin-bottom: 2rem;
+  }
+
   .restaurants-grid {
     grid-template-columns: 1fr;
     gap: 1.5rem;
   }
+
+  .card-content {
+    padding: 1.25rem;
+  }
+
+  .detail-text {
+    white-space: normal;
+    overflow: visible;
+  }
 }
 
 @media (max-width: 480px) {
+  .hero-section {
+    padding-top: max(2rem, calc(env(safe-area-inset-top) + 1rem));
+  }
+
   .hero-features {
     gap: 0.5rem;
   }
@@ -702,9 +727,14 @@ function initAOS() {
     font-size: 4rem;
   }
 
-  .auth-card,
-  .welcome-card {
+  .auth-hero-card,
+  .welcome-hero-card {
     padding: 2rem 1.5rem;
+  }
+
+  .card-badge {
+    top: 0.75rem;
+    right: 0.75rem;
   }
 }
 </style>

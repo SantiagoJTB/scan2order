@@ -1,7 +1,11 @@
 <template>
   <div class="login-container">
     <div class="login-box">
-      <h2>Iniciar Sesión</h2>
+      <div class="login-header">
+        <p class="eyebrow">🍽️ Scan2Order</p>
+        <h2>Iniciar Sesión</h2>
+        <p class="subtitle">Accede rápido a tus pedidos y restaurantes favoritos desde cualquier dispositivo.</p>
+      </div>
       <form @submit.prevent="handleLogin">
         <div class="form-group" v-if="!mfaStep">
           <label for="email">Email:</label>
@@ -195,24 +199,45 @@ function fillTestAccount(account) {
   justify-content: center;
   align-items: center;
   min-height: 100vh;
-  padding: 2rem;
+  padding: max(1rem, env(safe-area-inset-top)) 1rem max(1.5rem, env(safe-area-inset-bottom));
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
 }
 
 .login-box {
   background: white;
-  border-radius: 10px;
+  border-radius: 24px;
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
-  padding: 2.5rem;
+  padding: clamp(1.5rem, 4vw, 2.5rem);
   width: 100%;
-  max-width: 400px;
+  max-width: 460px;
+}
+
+.login-header {
+  text-align: center;
+  margin-bottom: 1.5rem;
+}
+
+.eyebrow {
+  margin: 0 0 0.35rem;
+  color: #667eea;
+  font-size: 0.9rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
 }
 
 .login-box h2 {
   text-align: center;
   color: #2c3e50;
-  margin-bottom: 1.5rem;
+  margin: 0 0 0.6rem;
   font-size: 1.8rem;
+}
+
+.subtitle {
+  margin: 0;
+  color: #7f8c8d;
+  font-size: 0.98rem;
+  line-height: 1.5;
 }
 
 .form-group {
@@ -228,9 +253,9 @@ function fillTestAccount(account) {
 
 .form-group input {
   width: 100%;
-  padding: 0.75rem;
+  padding: 0.9rem 1rem;
   border: 2px solid #ecf0f1;
-  border-radius: 5px;
+  border-radius: 12px;
   font-size: 1rem;
   transition: border-color 0.3s ease;
 }
@@ -260,11 +285,12 @@ function fillTestAccount(account) {
 
 .btn-login {
   width: 100%;
-  padding: 0.75rem;
+  min-height: 52px;
+  padding: 0.9rem 1rem;
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   color: white;
   border: none;
-  border-radius: 5px;
+  border-radius: 14px;
   font-size: 1rem;
   font-weight: 600;
   cursor: pointer;
@@ -274,11 +300,12 @@ function fillTestAccount(account) {
 .btn-secondary {
   width: 100%;
   margin-top: 0.75rem;
-  padding: 0.75rem;
+  min-height: 50px;
+  padding: 0.85rem 1rem;
   background: #ecf0f1;
   color: #2c3e50;
   border: none;
-  border-radius: 5px;
+  border-radius: 14px;
   font-size: 0.95rem;
   font-weight: 600;
   cursor: pointer;
@@ -335,11 +362,12 @@ function fillTestAccount(account) {
 
 .btn-google {
   width: 100%;
-  padding: 0.75rem;
+  min-height: 52px;
+  padding: 0.9rem 1rem;
   background: white;
   color: #444;
   border: 2px solid #e0e0e0;
-  border-radius: 5px;
+  border-radius: 14px;
   font-size: 1rem;
   font-weight: 600;
   cursor: pointer;
@@ -386,10 +414,10 @@ function fillTestAccount(account) {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  gap: 0.5rem;
+  gap: 0.75rem;
   background: #fff;
-  border-radius: 5px;
-  padding: 0.6rem;
+  border-radius: 12px;
+  padding: 0.75rem;
 }
 
 .demo-item-info {
@@ -408,12 +436,13 @@ function fillTestAccount(account) {
 
 .btn-demo {
   border: none;
-  border-radius: 5px;
+  border-radius: 10px;
   background: #667eea;
   color: #fff;
   font-weight: 600;
-  padding: 0.45rem 0.7rem;
+  padding: 0.55rem 0.9rem;
   cursor: pointer;
+  flex-shrink: 0;
 }
 
 .btn-demo:hover {
@@ -434,5 +463,33 @@ function fillTestAccount(account) {
 
 .register-link a:hover {
   text-decoration: underline;
+}
+
+@media (max-width: 480px) {
+  .login-container {
+    align-items: stretch;
+  }
+
+  .login-box {
+    border-radius: 20px;
+    margin: auto 0;
+  }
+
+  .login-box h2 {
+    font-size: 1.6rem;
+  }
+
+  .subtitle {
+    font-size: 0.92rem;
+  }
+
+  .demo-item {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .btn-demo {
+    width: 100%;
+  }
 }
 </style>

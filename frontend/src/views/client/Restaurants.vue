@@ -125,13 +125,13 @@ function selectRestaurant(restaurantId) {
 .restaurants-page {
   min-height: 100vh;
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  padding-bottom: 2rem;
+  padding-bottom: calc(2rem + env(safe-area-inset-bottom));
 }
 
 /* Header */
 .restaurants-header {
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  padding: 1.5rem 0;
+  padding: max(1rem, env(safe-area-inset-top)) 0 1rem;
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
   position: sticky;
   top: 0;
@@ -199,7 +199,8 @@ function selectRestaurant(restaurantId) {
 
 .search-input {
   width: 100%;
-  padding: 1.2rem 1.5rem;
+  min-height: 56px;
+  padding: 1rem 1.25rem;
   font-size: 1rem;
   border: none;
   border-radius: 50px;
@@ -404,12 +405,22 @@ function selectRestaurant(restaurantId) {
     padding: 1.5rem 1rem;
   }
 
+  .search-box {
+    position: sticky;
+    top: 5.75rem;
+    z-index: 40;
+    margin: 0 -1rem 1rem;
+    padding: 0 1rem 0.75rem;
+    background: linear-gradient(180deg, rgba(102, 126, 234, 0.96) 0%, rgba(102, 126, 234, 0) 100%);
+  }
+
   .restaurants-grid {
     grid-template-columns: 1fr;
   }
 
   .restaurant-card {
     padding: 1.5rem;
+    gap: 1rem;
   }
 
   .restaurant-card h3 {
@@ -422,6 +433,15 @@ function selectRestaurant(restaurantId) {
 }
 
 @media (max-width: 480px) {
+  .restaurant-card {
+    align-items: flex-start;
+  }
+
+  .arrow {
+    margin-left: 0;
+    align-self: flex-end;
+  }
+
   .empty-icon {
     font-size: 4rem;
   }

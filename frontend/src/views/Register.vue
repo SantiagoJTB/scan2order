@@ -1,7 +1,11 @@
 <template>
   <div class="register-container">
     <div class="register-box">
-      <h2>Crear Cuenta</h2>
+      <div class="register-header">
+        <p class="eyebrow">✨ Empieza en minutos</p>
+        <h2>Crear Cuenta</h2>
+        <p class="subtitle">Regístrate desde móvil o escritorio y comienza a pedir sin complicaciones.</p>
+      </div>
       <form @submit.prevent="handleRegister">
         <div class="form-group">
           <label for="name">Nombre:</label>
@@ -77,24 +81,45 @@ async function handleRegister() {
   justify-content: center;
   align-items: center;
   min-height: 100vh;
-  padding: 2rem;
+  padding: max(1rem, env(safe-area-inset-top)) 1rem max(1.5rem, env(safe-area-inset-bottom));
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
 }
 
 .register-box {
   background: white;
-  border-radius: 10px;
+  border-radius: 24px;
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
-  padding: 2.5rem;
+  padding: clamp(1.5rem, 4vw, 2.5rem);
   width: 100%;
-  max-width: 400px;
+  max-width: 460px;
+}
+
+.register-header {
+  text-align: center;
+  margin-bottom: 1.5rem;
+}
+
+.eyebrow {
+  margin: 0 0 0.35rem;
+  color: #667eea;
+  font-size: 0.9rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
 }
 
 .register-box h2 {
   text-align: center;
   color: #2c3e50;
-  margin-bottom: 1.5rem;
+  margin: 0 0 0.6rem;
   font-size: 1.8rem;
+}
+
+.subtitle {
+  margin: 0;
+  color: #7f8c8d;
+  font-size: 0.98rem;
+  line-height: 1.5;
 }
 
 .form-group {
@@ -110,9 +135,9 @@ async function handleRegister() {
 
 .form-group input {
   width: 100%;
-  padding: 0.75rem;
+  padding: 0.9rem 1rem;
   border: 2px solid #ecf0f1;
-  border-radius: 5px;
+  border-radius: 12px;
   font-size: 1rem;
   transition: border-color 0.3s ease;
 }
@@ -133,11 +158,12 @@ async function handleRegister() {
 
 .btn-register {
   width: 100%;
-  padding: 0.75rem;
+  min-height: 52px;
+  padding: 0.9rem 1rem;
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   color: white;
   border: none;
-  border-radius: 5px;
+  border-radius: 14px;
   font-size: 1rem;
   font-weight: 600;
   cursor: pointer;
@@ -167,5 +193,24 @@ async function handleRegister() {
 
 .login-link a:hover {
   text-decoration: underline;
+}
+
+@media (max-width: 480px) {
+  .register-container {
+    align-items: stretch;
+  }
+
+  .register-box {
+    border-radius: 20px;
+    margin: auto 0;
+  }
+
+  .register-box h2 {
+    font-size: 1.6rem;
+  }
+
+  .subtitle {
+    font-size: 0.92rem;
+  }
 }
 </style>

@@ -162,13 +162,13 @@ function formatOrderType(type) {
 .orders-page {
   min-height: 100vh;
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  padding-bottom: 2rem;
+  padding-bottom: calc(2rem + env(safe-area-inset-bottom));
 }
 
 /* Header */
 .orders-header {
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  padding: 1.5rem 0;
+  padding: max(1rem, env(safe-area-inset-top)) 0 1rem;
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
   position: sticky;
   top: 0;
@@ -227,7 +227,7 @@ function formatOrderType(type) {
 .content {
   max-width: 1200px;
   margin: 0 auto;
-  padding: 2rem 1.5rem;
+  padding: 2rem 1.5rem 2.5rem;
 }
 
 /* Loading & Empty States */
@@ -580,6 +580,14 @@ function formatOrderType(type) {
 
   .order-card {
     padding: 1.5rem;
+  }
+
+  .order-actions {
+    flex-direction: column;
+  }
+
+  .btn-reorder {
+    width: 100%;
   }
 
   .order-info h3 {

@@ -3,9 +3,20 @@
     <div class="header">
       <h1>Pago</h1>
       <p>Completa tu compra</p>
+      <div v-if="cart.items.length > 0" class="header-chips">
+        <span class="header-chip">{{ cart.itemCount }} productos</span>
+        <span class="header-chip">Total ${{ totalAmount.toFixed(2) }}</span>
+      </div>
     </div>
 
-    <div class="checkout-content">
+    <div v-if="cart.items.length === 0" class="empty-checkout">
+      <div class="empty-icon">🛒</div>
+      <h2>Tu carrito está vacío</h2>
+      <p>Agrega productos antes de continuar con el pago.</p>
+      <router-link to="/restaurants" class="btn-empty-action">Explorar restaurantes</router-link>
+    </div>
+
+    <div v-else class="checkout-content">
       <div class="checkout-form">
         <div class="section">
           <h2>Tipo de consumo</h2>
@@ -121,6 +132,7 @@
       <!-- Order summary -->
       <div class="order-summary">
         <h2>Resumen de tu orden</h2>
+        <p class="summary-caption">Revisa los importes y confirma la modalidad antes de enviar el pedido.</p>
         <div class="summary-items">
           <div v-for="item in cart.items" :key="item.id" class="summary-item">
             <div>
@@ -428,15 +440,21 @@ onMounted(() => {
 
 <style scoped>
 .checkout-container {
-  max-width: 1200px;
-  margin: 0 auto;
-  padding: 2rem;
+  min-height: 100vh;
+  padding: max(1rem, env(safe-area-inset-top)) 1rem max(2rem, env(safe-area-inset-bottom));
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
 }
 
 .header {
   text-align: center;
   color: white;
-  margin-bottom: 2rem;
+  max-width: 1200px;
+  margin: 0 auto 1.5rem;
+  padding: 1.75rem;
+  border-radius: 24px;
+  background: rgba(255, 255, 255, 0.14);
+  backdrop-filter: blur(14px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
 }
 
 .header h1 {
@@ -444,16 +462,82 @@ onMounted(() => {
   margin-bottom: 0.5rem;
 }
 
+.header p {
+  margin: 0;
+}
+
+.header-chips {
+  margin-top: 1rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  justify-content: center;
+}
+
+.header-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.55rem 0.9rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.24);
+  color: white;
+  font-weight: 700;
+  font-size: 0.92rem;
+}
+
+.empty-checkout {
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 2.5rem 1.5rem;
+  text-align: center;
+  background: white;
+  border-radius: 24px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+}
+
+.empty-icon {
+  font-size: 4rem;
+  margin-bottom: 1rem;
+}
+
+.empty-checkout h2 {
+  margin: 0 0 0.5rem;
+  color: #2c3e50;
+}
+
+.empty-checkout p {
+  margin: 0 0 1.5rem;
+  color: #7f8c8d;
+}
+
+.btn-empty-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 52px;
+  padding: 0.9rem 1.25rem;
+  border-radius: 14px;
+  text-decoration: none;
+  color: white;
+  font-weight: 700;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+}
+
 .checkout-content {
+  max-width: 1200px;
+  margin: 0 auto;
   display: grid;
   grid-template-columns: 2fr 1fr;
   gap: 2rem;
+  align-items: start;
 }
 
 .checkout-form {
   background: white;
-  border-radius: 10px;
-  padding: 2rem;
+  border-radius: 24px;
+  padding: clamp(1.25rem, 3vw, 2rem);
   box-shadow: 0 8px 16px rgba(0, 0, 0, 0.1);
 }
 
@@ -518,9 +602,10 @@ onMounted(() => {
   align-items: center;
   gap: 0.5rem;
   cursor: pointer;
-  padding: 0.75rem;
+  min-height: 56px;
+  padding: 0.9rem 1rem;
   border: 2px solid #ecf0f1;
-  border-radius: 5px;
+  border-radius: 14px;
   transition: border-color 0.3s ease;
 }
 
@@ -560,9 +645,10 @@ onMounted(() => {
 .btn-back,
 .btn-pay {
   flex: 1;
+  min-height: 54px;
   padding: 1rem;
   border: none;
-  border-radius: 5px;
+  border-radius: 14px;
   font-size: 1rem;
   font-weight: 600;
   cursor: pointer;
@@ -598,11 +684,12 @@ onMounted(() => {
 
 .order-summary {
   background: white;
-  border-radius: 10px;
-  padding: 2rem;
+  border-radius: 24px;
+  padding: clamp(1.25rem, 3vw, 2rem);
   box-shadow: 0 8px 16px rgba(0, 0, 0, 0.1);
   height: fit-content;
-  sticky: top 2rem;
+  position: sticky;
+  top: 1.5rem;
 }
 
 .order-summary h2 {
@@ -611,6 +698,13 @@ onMounted(() => {
   margin-bottom: 1rem;
   border-bottom: 2px solid #ecf0f1;
   padding-bottom: 0.5rem;
+}
+
+.summary-caption {
+  margin: -0.25rem 0 1rem;
+  color: #7f8c8d;
+  font-size: 0.92rem;
+  line-height: 1.5;
 }
 
 .summary-items {
@@ -680,7 +774,7 @@ onMounted(() => {
 
 .modal {
   background: white;
-  border-radius: 10px;
+  border-radius: 20px;
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
   max-width: 400px;
   width: 100%;
@@ -727,12 +821,60 @@ onMounted(() => {
 }
 
 @media (max-width: 768px) {
+  .checkout-container {
+    padding: max(0.75rem, env(safe-area-inset-top)) 0.75rem max(1.25rem, env(safe-area-inset-bottom));
+  }
+
+  .header {
+    text-align: left;
+    padding: 1.25rem;
+    border-radius: 20px;
+  }
+
+  .header-chips {
+    justify-content: flex-start;
+  }
+
   .checkout-content {
     grid-template-columns: 1fr;
+    gap: 1rem;
+  }
+
+  .checkout-form {
+    order: 2;
   }
 
   .order-summary {
-    sticky: unset;
+    order: 1;
+    position: static;
+  }
+
+  .form-row {
+    grid-template-columns: 1fr;
+  }
+
+  .form-actions {
+    flex-direction: column-reverse;
+  }
+
+  .btn-back,
+  .btn-pay {
+    width: 100%;
+  }
+
+  .modal {
+    width: auto;
+    margin: 1rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .empty-checkout {
+    padding: 2rem 1.1rem;
+  }
+
+  .header-chip {
+    font-size: 0.85rem;
   }
 }
 </style>

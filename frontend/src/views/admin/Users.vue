@@ -18,8 +18,14 @@
       <!-- Vista para SUPERADMIN: Usuarios agrupados -->
       <div v-if="!isLoading && auth.hasRole('superadmin')">
         <div class="section limits-section">
-          <h2 class="section-title">⚙️ Límites de creación</h2>
-          <div class="limits-grid">
+          <div class="global-options-header">
+            <h2 class="section-title">⚙️ Opciones globales</h2>
+            <button class="btn-global-options" @click="showGlobalOptions = !showGlobalOptions" type="button">
+              {{ showGlobalOptions ? 'Ocultar opciones' : 'Abrir opciones' }}
+            </button>
+          </div>
+
+          <div v-if="showGlobalOptions" class="limits-grid">
             <label class="limit-field">
               <span>Límite global de usuarios</span>
               <input v-model.number="systemLimits.global_user_limit" type="number" min="1" />
@@ -78,21 +84,6 @@
               <div class="admin-limit-box">
                 <div class="admin-limit-meta">
                   Staff creados: <strong>{{ group.team.length }}</strong> / <strong>{{ getAdminEffectiveLimit(group.admin.id) }}</strong>
-                </div>
-                <div class="admin-limit-controls">
-                  <input
-                    v-model.number="adminLimitInputs[group.admin.id]"
-                    type="number"
-                    min="0"
-                    class="admin-limit-input"
-                  />
-                  <button
-                    class="btn-save-limit btn-save-limit-small"
-                    :disabled="isSavingAdminLimitId === group.admin.id"
-                    @click="saveAdminLimit(group.admin.id)"
-                  >
-                    {{ isSavingAdminLimitId === group.admin.id ? 'Guardando...' : 'Guardar límite' }}
-                  </button>
                 </div>
               </div>
               <div v-if="group.team && group.team.length > 0" class="admin-staff-inline">
@@ -403,7 +394,7 @@
     <div v-if="showEditModal" class="modal-overlay">
       <div class="modal">
         <div class="modal-header">
-          <h2>Editar usuario</h2>
+          <h2>{{ editModalTitle }}</h2>
           <button @click="cancelEdit" class="btn-close">×</button>
         </div>
 
@@ -437,6 +428,17 @@
               type="tel"
               id="edit-phone"
               placeholder="Teléfono"
+            />
+          </div>
+
+          <div v-if="isEditingAdmin" class="form-group">
+            <label for="edit-staff-limit">Límite de staff para este admin:</label>
+            <input
+              v-model.number="editUser.staffCreationLimit"
+              type="number"
+              id="edit-staff-limit"
+              min="0"
+              placeholder="Cantidad máxima de staff"
             />
           </div>
 
@@ -582,7 +584,7 @@ const isUpdating = ref(false)
 const isChangingPassword = ref(false)
 const isLoadingLimits = ref(false)
 const isSavingSystemLimits = ref(false)
-const isSavingAdminLimitId = ref(null)
+const showGlobalOptions = ref(false)
 const createError = ref(null)
 const editError = ref(null)
 const passwordError = ref(null)
@@ -591,7 +593,6 @@ const systemLimits = ref({
   default_admin_staff_limit: 10,
 })
 const currentTotalUsers = ref(0)
-const adminLimitInputs = ref({})
 const adminLimitsById = ref({})
 const passwordData = ref({
   password: '',
@@ -600,7 +601,8 @@ const passwordData = ref({
 const editUser = ref({
   name: '',
   email: '',
-  phone: ''
+  phone: '',
+  staffCreationLimit: null,
 })
 const newUser = ref({
   name: '',
@@ -663,6 +665,14 @@ const showAssignAdminOption = computed(() => {
 })
 
 const canManageUsers = computed(() => auth.hasAnyRole(['superadmin', 'admin']))
+
+const isEditingAdmin = computed(() => {
+  return auth.hasRole('superadmin') && userToEdit.value?.role?.name === 'admin'
+})
+
+const editModalTitle = computed(() => {
+  return isEditingAdmin.value ? 'Editar admin' : 'Editar usuario'
+})
 
 function canDeleteUser(user) {
   // No se puede eliminar a uno mismo
@@ -779,15 +789,12 @@ async function fetchCreationLimits() {
     currentTotalUsers.value = Number(data.current_total_users || 0)
 
     const nextLimitsById = {}
-    const nextInputs = {}
     ;(Array.isArray(data.admins) ? data.admins : []).forEach((admin) => {
       const effective = Number(admin.effective_staff_creation_limit || 0)
       nextLimitsById[admin.id] = effective
-      nextInputs[admin.id] = effective
     })
 
     adminLimitsById.value = nextLimitsById
-    adminLimitInputs.value = nextInputs
   } catch (err) {
     showToast(err.message, 'error')
   } finally {
@@ -828,37 +835,6 @@ async function saveSystemLimits() {
     showToast(err.message, 'error')
   } finally {
     isSavingSystemLimits.value = false
-  }
-}
-
-async function saveAdminLimit(adminId) {
-  if (!auth.hasRole('superadmin')) return
-
-  isSavingAdminLimitId.value = adminId
-  try {
-    const response = await fetch(`/api/users/${adminId}/staff-limit`, {
-      method: 'PATCH',
-      headers: {
-        'Authorization': `Bearer ${auth.token}`,
-        'Content-Type': 'application/json',
-        'Accept': 'application/json'
-      },
-      body: JSON.stringify({
-        staff_creation_limit: Number(adminLimitInputs.value[adminId] || 0)
-      })
-    })
-
-    const data = await response.json().catch(() => null)
-    if (!response.ok) {
-      throw new Error(data?.message || 'No se pudo guardar el límite del admin')
-    }
-
-    showToast('Límite de staff actualizado', 'success')
-    await fetchCreationLimits()
-  } catch (err) {
-    showToast(err.message, 'error')
-  } finally {
-    isSavingAdminLimitId.value = null
   }
 }
 
@@ -988,7 +964,10 @@ function openEditModal(user) {
   editUser.value = {
     name: user.name || '',
     email: user.email || '',
-    phone: user.phone || ''
+    phone: user.phone || '',
+    staffCreationLimit: user.role?.name === 'admin'
+      ? Number(adminLimitsById.value[user.id] ?? systemLimits.value.default_admin_staff_limit)
+      : null,
   }
   showEditModal.value = true
 }
@@ -997,7 +976,7 @@ function cancelEdit() {
   showEditModal.value = false
   userToEdit.value = null
   editError.value = null
-  editUser.value = { name: '', email: '', phone: '' }
+  editUser.value = { name: '', email: '', phone: '', staffCreationLimit: null }
 }
 
 function openPasswordFromEdit() {
@@ -1026,6 +1005,9 @@ async function confirmEdit() {
   editError.value = null
 
   try {
+    const editingAdmin = auth.hasRole('superadmin') && userToEdit.value?.role?.name === 'admin'
+    const targetAdminId = userToEdit.value.id
+
     const response = await fetch(`/api/users/${userToEdit.value.id}`, {
       method: 'PATCH',
       headers: {
@@ -1051,8 +1033,28 @@ async function confirmEdit() {
       throw new Error(data?.message || 'Error al editar usuario')
     }
 
+    if (editingAdmin) {
+      const limitResponse = await fetch(`/api/users/${targetAdminId}/staff-limit`, {
+        method: 'PATCH',
+        headers: {
+          'Authorization': `Bearer ${auth.token}`,
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        },
+        body: JSON.stringify({
+          staff_creation_limit: Number(editUser.value.staffCreationLimit ?? 0)
+        })
+      })
+
+      const limitData = await limitResponse.json().catch(() => null)
+      if (!limitResponse.ok) {
+        throw new Error(limitData?.message || 'No se pudo guardar el límite de staff del admin')
+      }
+    }
+
     cancelEdit()
     await fetchUsers()
+    await fetchCreationLimits()
     showToast('Usuario actualizado correctamente', 'success')
   } catch (err) {
     editError.value = err.message
@@ -1278,11 +1280,35 @@ onMounted(async () => {
   background: #f8fbff;
 }
 
+.global-options-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+}
+
+.global-options-header .section-title {
+  margin-bottom: 0;
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.btn-global-options {
+  border: none;
+  border-radius: 6px;
+  background: #667eea;
+  color: white;
+  padding: 0.55rem 0.85rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
 .limits-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
   gap: 0.75rem;
   align-items: end;
+  margin-top: 0.9rem;
 }
 
 .limit-field {
@@ -1331,25 +1357,13 @@ onMounted(async () => {
 .admin-limit-meta {
   color: #2c3e50;
   font-size: 0.9rem;
-  margin-bottom: 0.45rem;
+  margin-bottom: 0.35rem;
 }
 
-.admin-limit-controls {
-  display: flex;
-  gap: 0.5rem;
-  align-items: center;
-}
-
-.admin-limit-input {
-  width: 90px;
-  border: 1px solid #d9e3ef;
-  border-radius: 6px;
-  padding: 0.45rem 0.55rem;
-}
-
-.btn-save-limit-small {
-  padding: 0.45rem 0.7rem;
+.admin-limit-hint {
+  margin: 0;
   font-size: 0.85rem;
+  color: #607185;
 }
 
 .users-table {

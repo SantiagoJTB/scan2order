@@ -343,6 +343,7 @@ class AuthController extends Controller
         if ($user->role && $user->role->name === 'staff') {
             // Staff must have exactly one restaurant assigned
             $restaurant = $user->restaurants()->first();
+
             $userArray['restaurant_id'] = $restaurant?->id ?? null;
             $userArray['restaurant_name'] = $restaurant?->name ?? null;
         }

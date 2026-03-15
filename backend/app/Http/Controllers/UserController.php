@@ -309,6 +309,7 @@ class UserController extends Controller
                 'created_by' => $createdBy,
                 'status' => 'active',
             ]);
+
             $createdUsers[] = $this->formatUser($newUser);
             $this->auditAction(
                 actor: $user,

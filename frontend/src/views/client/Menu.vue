@@ -5,6 +5,11 @@
         <h1>{{ restaurant.name }}</h1>
         <p v-if="restaurant.address" class="restaurant-info">📍 {{ restaurant.address }}</p>
         <p v-if="restaurant.phone" class="restaurant-info">📞 {{ restaurant.phone }}</p>
+        <div class="restaurant-stats">
+          <span class="stat-chip">{{ allSections.length }} secciones</span>
+          <span class="stat-chip">{{ totalProducts }} productos</span>
+          <span v-if="cart.itemCount > 0" class="stat-chip stat-chip-accent">{{ cart.itemCount }} en carrito</span>
+        </div>
       </div>
       <div v-else>
         <h1>Menú de Productos</h1>
@@ -16,12 +21,28 @@
       <!-- Search bar -->
       <div class="filters">
         <div class="filters-row">
-          <input
-            v-model="searchText"
-            type="text"
-            placeholder="Buscar productos..."
-            class="search-input"
-          />
+          <div class="search-input-wrap">
+            <span class="search-icon">🔎</span>
+            <input
+              v-model="searchText"
+              type="text"
+              placeholder="Buscar productos..."
+              class="search-input"
+            />
+            <button
+              v-if="searchText"
+              type="button"
+              class="btn-clear-search"
+              @click="searchText = ''"
+            >
+              ✕
+            </button>
+          </div>
+        </div>
+        <div v-if="selectedSection" class="filters-meta">
+          <span>{{ allSections.length }} secciones</span>
+          <span>{{ filteredCurrentProducts.length }} productos visibles</span>
+          <span v-if="searchText">Buscando: “{{ searchText }}”</span>
         </div>
       </div>
 
@@ -154,9 +175,23 @@ const filteredCurrentProducts = computed(() => {
   return filterProducts(selectedSection.value.products)
 })
 
+const totalProducts = computed(() => {
+  return allSections.value.reduce((count, section) => count + (section.products?.length || 0), 0)
+})
+
 function selectSection(section) {
   selectedSection.value = section
   expandedProductIds.value = new Set()
+
+  if (typeof window !== 'undefined' && window.innerWidth <= 1024) {
+    requestAnimationFrame(() => {
+      const productsTop = document.querySelector('.products-container')
+      if (!productsTop) return
+
+      const top = productsTop.getBoundingClientRect().top + window.scrollY - 110
+      window.scrollTo({ top, behavior: 'smooth' })
+    })
+  }
 }
 
 function isProductExpanded(productId) {
@@ -241,12 +276,13 @@ onMounted(() => {
 .menu-container {
   min-height: 100vh;
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  padding-bottom: calc(6.5rem + env(safe-area-inset-bottom));
 }
 
 .header {
   text-align: center;
   color: white;
-  padding: 3rem 1.5rem;
+  padding: max(2rem, calc(env(safe-area-inset-top) + 1rem)) 1.5rem 3rem;
   position: relative;
 }
 
@@ -282,18 +318,46 @@ onMounted(() => {
   gap: 0.5rem;
 }
 
+.restaurant-stats {
+  margin-top: 1.2rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  justify-content: center;
+}
+
+.stat-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.55rem 0.9rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.18);
+  border: 1px solid rgba(255, 255, 255, 0.24);
+  color: white;
+  font-size: 0.92rem;
+  font-weight: 700;
+}
+
+.stat-chip-accent {
+  background: rgba(39, 174, 96, 0.22);
+}
+
 .menu-content {
   background: #f8f9fa;
   border-radius: 30px 30px 0 0;
-  padding: 3rem 1.5rem;
+  padding: 2rem 1.5rem 0;
   margin-top: -2rem;
   position: relative;
   min-height: calc(100vh - 300px);
 }
 
 .filters {
-  max-width: 600px;
-  margin: 0 auto 3rem;
+  max-width: 1400px;
+  margin: 0 auto 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
 }
 
 .filters-row {
@@ -302,10 +366,26 @@ onMounted(() => {
   gap: 1rem;
 }
 
+.search-input-wrap {
+  position: relative;
+  width: 100%;
+}
+
+.search-icon {
+  position: absolute;
+  left: 1rem;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 1rem;
+  opacity: 0.65;
+  pointer-events: none;
+}
+
 .search-input {
   width: 100%;
   flex: 1;
-  padding: 1.2rem 1.5rem;
+  min-height: 56px;
+  padding: 1rem 3rem 1rem 2.8rem;
   border: 2px solid transparent;
   border-radius: 50px;
   font-size: 1rem;
@@ -336,6 +416,37 @@ onMounted(() => {
   border-color: #667eea;
   box-shadow: 0 6px 30px rgba(102, 126, 234, 0.2);
   transform: translateY(-2px);
+}
+
+.filters-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  color: #667085;
+  font-size: 0.92rem;
+  font-weight: 600;
+}
+
+.filters-meta span {
+  background: rgba(255, 255, 255, 0.95);
+  border-radius: 999px;
+  padding: 0.45rem 0.8rem;
+  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.06);
+}
+
+.btn-clear-search {
+  position: absolute;
+  right: 0.7rem;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 34px;
+  height: 34px;
+  border: none;
+  border-radius: 50%;
+  background: #eef1ff;
+  color: #5568d3;
+  font-weight: 800;
+  cursor: pointer;
 }
 
 .loading, .error, .no-products {
@@ -711,7 +822,7 @@ onMounted(() => {
   left: 0;
   right: 0;
   background: white;
-  padding: 1.5rem;
+  padding: 1rem max(1rem, env(safe-area-inset-right)) calc(1rem + env(safe-area-inset-bottom)) max(1rem, env(safe-area-inset-left));
   box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.15);
   z-index: 100;
   transform: translateY(0);
@@ -752,7 +863,8 @@ onMounted(() => {
   margin: 0 auto;
   display: block;
   text-align: center;
-  padding: 1.2rem;
+  min-height: 52px;
+  padding: 1rem 1.2rem;
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   color: white;
   text-decoration: none;
@@ -771,128 +883,129 @@ onMounted(() => {
 /* Mobile Responsive */
 @media (max-width: 1024px) {
   .menu-layout {
-    grid-template-columns: 240px 1fr;
+    grid-template-columns: 1fr;
   }
 
-  .products-grid {
-    grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
-    gap: 1.5rem;
+  .sections-nav {
+    top: 0.75rem;
+    z-index: 30;
+    max-height: none;
+    overflow: visible;
+    padding: 0.8rem;
+  }
+
+  .nav-header {
+    display: none;
+  }
+
+  .nav-sections {
+    display: flex;
+    flex-direction: row;
+    gap: 0.75rem;
+    overflow-x: auto;
+    padding-bottom: 0.2rem;
+    scrollbar-width: none;
+  }
+
+  .nav-sections::-webkit-scrollbar {
+    display: none;
+  }
+
+  .nav-section-btn {
+    flex: 0 0 auto;
+    min-width: max-content;
   }
 }
 
 @media (max-width: 768px) {
-  .filters-row {
-    flex-direction: column;
-    align-items: stretch;
+  .header {
+    padding: max(1.5rem, calc(env(safe-area-inset-top) + 0.75rem)) 1rem 2.25rem;
   }
 
-  .toggle-images {
-    justify-content: center;
-    width: 100%;
+  .restaurant-header {
+    padding: 1.5rem;
+    text-align: left;
   }
 
-  .menu-layout {
-    grid-template-columns: 1fr;
-    gap: 1rem;
+  .restaurant-info {
+    justify-content: flex-start;
   }
 
-  .sections-nav {
-    position: static;
-    max-height: none;
-    padding: 0.8rem;
+  .restaurant-stats {
+    justify-content: flex-start;
   }
 
-  .nav-sections {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 0.5rem;
-  }
-
-  .nav-section-btn {
-    padding: 0.6rem;
-  }
-
-  .section-name {
-    font-size: 0.88rem;
+  .menu-content {
+    padding: 1.25rem 1rem 0;
+    border-radius: 26px 26px 0 0;
   }
 
   .section-header {
     padding: 0.9rem 1rem;
   }
 
-  .menu-content {
-    padding: 2rem 1rem;
-  }
-
-  .products-grid {
-    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-    gap: 1.2rem;
-  }
-
-  .catalog-title {
-    font-size: 1.8rem;
-  }
-
-  .section-title {
-    font-size: 1.4rem;
-  }
-
-  .product-image {
-    height: 160px;
-  }
-
-  .image-placeholder {
-    font-size: 3.5rem;
-  }
-
-  .cart-preview {
-    padding: 1rem;
-  }
-}
-
-@media (max-width: 480px) {
-  .nav-sections {
-    grid-template-columns: 1fr;
-  }
-
-  .header {
-    padding: 2rem 1rem;
-  }
-
-  .restaurant-header {
-    padding: 1.5rem;
-    border-radius: 16px;
-  }
-
-  .menu-content {
-    border-radius: 20px 20px 0 0;
-    padding: 1.5rem 0.8rem;
-  }
-
   .products-grid {
     grid-template-columns: 1fr;
     gap: 1rem;
   }
 
+  .product-image {
+    height: 170px;
+  }
+
   .product-card:hover {
-    transform: translateY(-4px);
+    transform: none;
   }
 
-  .catalog-title {
-    font-size: 1.5rem;
+  .product-footer {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.85rem;
   }
 
-  .section-title {
-    font-size: 1.2rem;
-  }
-
-  .product-info {
-    padding: 1.2rem;
+  .price {
+    font-size: 1.35rem;
   }
 
   .btn-add {
-    padding: 0.7rem 1.2rem;
-    font-size: 0.9rem;
+    width: 100%;
+    min-height: 48px;
+  }
+
+  .preview-header {
+    margin-bottom: 0.75rem;
+  }
+
+  .preview-total {
+    font-size: 1.2rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .restaurant-header {
+    padding: 1.5rem;
+    border-radius: 16px;
+  }
+
+  .restaurant-header h1 {
+    font-size: 1.8rem;
+  }
+
+  .stat-chip {
+    font-size: 0.84rem;
+  }
+
+  .filters-meta {
+    gap: 0.5rem;
+    font-size: 0.85rem;
+  }
+
+  .nav-section-btn {
+    padding: 0.65rem 0.85rem;
+  }
+
+  .product-info {
+    padding: 1rem;
   }
 }
 </style>
